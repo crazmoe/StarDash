@@ -1,0 +1,49 @@
+#!/bin/sh
+set -e
+
+CONF=/etc/stardash/config.toml
+
+if [ "$1" = "configure" ]; then
+    if ! getent passwd stardash >/dev/null; then
+        adduser --system --group --home /var/lib/stardash --no-create-home \
+            --gecos "StarDash" stardash >/dev/null
+    fi
+    install -d -o stardash -g stardash -m 0750 /var/lib/stardash
+    # config.toml enthält ggf. Passwörter (Datenbank, Tokens)
+    chown root:stardash "$CONF"
+    chmod 0640 "$CONF"
+
+    # Antwort aus debconf bei der ersten Installation eintragen
+    if [ -z "$2" ] && [ -e /usr/share/debconf/confmodule ]; then
+        . /usr/share/debconf/confmodule
+        db_get stardash/datenbank || RET=sqlite
+        ART="$RET"
+        if [ "$ART" != "sqlite" ]; then
+            db_get stardash/adresse || RET=""
+            ADRESSE="$RET"
+            sed -i "s|^art = \"sqlite\"|art = \"$ART\"|" "$CONF"
+            if [ -n "$ADRESSE" ]; then
+                # Adresse kann Sonderzeichen enthalten: per awk einsetzen
+                awk -v a="$ADRESSE" '
+                    /^# adresse = "mysql:/ && !done { print "adresse = \"" a "\""; done=1 }
+                    { print }' "$CONF" > "$CONF.neu"
+                cat "$CONF.neu" > "$CONF"
+                rm -f "$CONF.neu"
+            fi
+        fi
+        db_stop || true
+    fi
+fi
+
+#DEBHELPER#
+
+if [ "$1" = "configure" ] && [ -z "$2" ]; then
+    cat <<'TEXT'
+
+StarDash ist installiert. Nächste Schritte:
+  sudo stardash firma-anlegen "Meine Firma"   # Schlüssel für die Clients
+  sudo stardash benutzer admin                # Zugang zur Weboberfläche
+  Webserver mit HTTPS davor: /usr/share/doc/stardash/
+TEXT
+fi
+exit 0

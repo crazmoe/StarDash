@@ -1,0 +1,32 @@
+Template: stardash/datenbank
+Type: select
+Choices: sqlite, mariadb, postgresql
+Default: sqlite
+Description: Datenbank für StarDash:
+ SQLite braucht nichts weiter und reicht für die meisten Firmen.
+ .
+ MariaDB oder PostgreSQL passen, wenn schon ein Datenbankserver mit Backup
+ läuft. Datenbank und Benutzer legt der Admin dort selbst an; StarDash baut
+ seine Tabellen beim Start auf.
+Description-en.UTF-8: Database for StarDash:
+ SQLite needs nothing else and is enough for most companies.
+ .
+ MariaDB or PostgreSQL fit when a database server with backups is already
+ running. Create the database and user there yourself; StarDash creates its
+ tables on start.
+
+Template: stardash/adresse
+Type: string
+Default:
+Description: Verbindung zur Datenbank:
+ Beispiele:
+  mysql://stardash:PASSWORT@localhost/stardash
+  postgres://stardash:PASSWORT@localhost/stardash
+ .
+ Lässt sich später in /etc/stardash/config.toml ändern.
+Description-en.UTF-8: Database connection:
+ Examples:
+  mysql://stardash:PASSWORD@localhost/stardash
+  postgres://stardash:PASSWORD@localhost/stardash
+ .
+ Can be changed later in /etc/stardash/config.toml.

@@ -1,0 +1,7 @@
+# StarDash hinter Caddy (holt das Zertifikat selbst)
+stardash.firma.ch {
+    request_body {
+        max_size 25MB
+    }
+    reverse_proxy 127.0.0.1:8470
+}
