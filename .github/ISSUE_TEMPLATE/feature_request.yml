@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a new feature or an improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Issues may be written in English or German.
+        For a rough idea you would like to discuss first, please open a post in
+        [Discussions → Ideas](https://github.com/crazmoe/StarDash/discussions/categories/ideas) instead.
+        StarDash shows the state of the clients, never the behaviour of people: suggestions that would
+        track users, presence, calls or working times cannot be accepted.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the situation in which you miss this feature.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How should StarDash behave?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, distribution, database or anything else that helps.
