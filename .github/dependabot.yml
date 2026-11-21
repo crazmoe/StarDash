@@ -1,0 +1,19 @@
+# Wöchentliche Updates, je Bereich ein Sammel-PR für Minor- und Patch-Versionen;
+# Major-Versionen kommen einzeln, weil sie eher Anpassungen brauchen.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      cargo:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

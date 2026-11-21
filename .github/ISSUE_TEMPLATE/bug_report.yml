@@ -1,0 +1,85 @@
+name: Bug report
+description: Something in StarDash does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Issues may be written in English or German.
+        Please do not post passwords, tokens, server addresses, company names or phone numbers you do not want to make public.
+        Security vulnerabilities do not belong here; see the link "Report a security vulnerability" on the previous page.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A short description of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: StarDash version
+      description: "`stardash --version` or the footer of the web interface."
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Linux distribution
+      placeholder: "Debian 13"
+    validations:
+      required: true
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database
+      options:
+        - SQLite
+        - MariaDB
+        - PostgreSQL
+    validations:
+      required: true
+  - type: input
+    id: clients
+    attributes:
+      label: Client versions
+      description: StarCLX, StarCMX or StarMAC versions involved, if relevant.
+      placeholder: "StarCLX 2.0.0, StarCMX 2.0.0"
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      multiple: true
+      options:
+        - Installation / package / service
+        - Database
+        - Receiving reports or status messages
+        - Dashboard / workstations
+        - Report viewer
+        - Creating issues (GitHub, GitLab, Gitea)
+        - Metrics / monitoring
+        - Sign-in / accounts
+        - Other
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: "Output of `journalctl -u stardash` or screenshots. Please remove personal data first."
+      render: text
