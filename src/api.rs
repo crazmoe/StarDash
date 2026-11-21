@@ -42,7 +42,6 @@ async fn company(app: &App, headers: &HeaderMap) -> Result<i64, Response> {
 }
 
 /// Entpackt den Körper, falls gzip
-#[allow(clippy::result_large_err)]
 fn body(headers: &HeaderMap, body: &[u8]) -> Result<Vec<u8>, Response> {
     let gzip = headers
         .get(header::CONTENT_ENCODING)

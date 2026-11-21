@@ -2,6 +2,9 @@
 //! STARFACE-Clients StarCLX, StarCMX und StarMAC. Läuft bei der Firma als
 //! systemd-Dienst, Daten in SQLite, MariaDB oder PostgreSQL.
 
+// Handler geben `Result<_, Response>` zurück (in axum üblich)
+#![allow(clippy::result_large_err)]
+
 mod api;
 mod auth;
 mod config;
