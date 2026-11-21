@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+#DEBHELPER#
+
+if [ "$1" = "purge" ]; then
+    rm -rf /var/lib/stardash
+    if [ -e /usr/share/debconf/confmodule ]; then
+        . /usr/share/debconf/confmodule
+        db_purge || true
+    fi
+    if getent passwd stardash >/dev/null; then
+        deluser --system stardash >/dev/null 2>&1 || true
+    fi
+fi
+exit 0

@@ -8,3 +8,53 @@ license = "MIT"
 repository = "https://github.com/crazmoe/StarDash"
 
 [dependencies]
+anyhow = "1"
+argon2 = { version = "0.5", features = ["std"] }
+axum = { version = "0.8", features = ["form", "query"] }
+flate2 = "1"
+regex = "1"
+getrandom = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "any", "sqlite", "mysql", "postgres", "migrate"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "fs", "time", "net"] }
+toml = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+urlencoding = "2"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+[profile.release]
+lto = "thin"
+strip = true
+
+[package.metadata.deb]
+maintainer = "StarDash <https://github.com/crazmoe/StarDash>"
+copyright = "2026, StarDash contributors"
+license-file = ["LICENSE", "0"]
+section = "net"
+priority = "optional"
+depends = "$auto, adduser, debconf (>= 0.5) | debconf-2.0"
+recommends = "nginx | apache2 | caddy"
+suggests = "mariadb-server | postgresql"
+extended-description = """\
+Selbst gehostete Support-Übersicht für die STARFACE-Clients StarCLX, StarCMX \
+und StarMAC: Fehlerberichte mit bereinigten Protokollen, Zustand und Version \
+jedes Arbeitsplatzes, Issues mit Protokoll, Prometheus-Metriken. Daten in \
+SQLite, MariaDB oder PostgreSQL. Zeigt den Zustand der Programme, nicht das \
+Verhalten von Personen."""
+conf-files = ["/etc/stardash/config.toml"]
+maintainer-scripts = "packaging/debian/"
+systemd-units = { unit-name = "stardash", enable = true, start = true, restart-after-upgrade = true }
+assets = [
+    ["target/release/stardash", "usr/bin/", "755"],
+    ["packaging/config.toml", "etc/stardash/config.toml", "640"],
+    ["packaging/doc/*", "usr/share/doc/stardash/", "644"],
+    ["README.md", "usr/share/doc/stardash/README.md", "644"],
+    ["CHANGELOG.md", "usr/share/doc/stardash/CHANGELOG.md", "644"],
+]

@@ -1,0 +1,36 @@
+[Unit]
+Description=StarDash – Support-Übersicht für StarCLX, StarCMX und StarMAC
+Documentation=https://github.com/crazmoe/StarDash
+After=network-online.target mariadb.service postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stardash
+Group=stardash
+ExecStart=/usr/bin/stardash serve
+Restart=on-failure
+RestartSec=5
+Environment=RUST_LOG=info,sqlx=warn
+
+# Abschottung: schreibt nur in den Datenordner
+StateDirectory=stardash
+StateDirectoryMode=0750
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

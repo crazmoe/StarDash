@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+. /usr/share/debconf/confmodule
+
+# Nur bei der ersten Installation fragen; danach gilt config.toml.
+if [ -f /etc/stardash/config.toml ] && [ -n "$2" ]; then
+    exit 0
+fi
+
+db_input medium stardash/datenbank || true
+db_go || true
+db_get stardash/datenbank
+if [ "$RET" != "sqlite" ]; then
+    db_input high stardash/adresse || true
+    db_go || true
+fi
+exit 0

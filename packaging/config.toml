@@ -1,0 +1,60 @@
+# StarDash – Einstellungen
+# Nach Änderungen: systemctl restart stardash
+
+# Adresse, auf der StarDash lauscht. Standard nur lokal; davor gehört ein
+# Webserver mit HTTPS (Beispiele in /usr/share/doc/stardash/).
+listen = "127.0.0.1:8470"
+
+# Datenordner (Berichte, SQLite-Datei)
+data_dir = "/var/lib/stardash"
+
+# Berichte nach so vielen Tagen löschen
+retention_days = 30
+
+# Grösster Bericht in MB (gepackt)
+max_upload_mb = 20
+
+# Ohne Statusmeldung seit so vielen Minuten gilt ein Arbeitsplatz als nicht
+# erreichbar (Clients melden sich standardmässig alle 15 Minuten)
+offline_after_minutes = 45
+
+# Einmal am Tag die neueste Version von StarCLX/StarCMX/StarMAC auf GitHub
+# nachsehen, um veraltete Arbeitsplätze zu markieren (false in Netzen ohne
+# Internet)
+check_releases = true
+
+# Metriken unter /metrics: standardmässig nur zusammengezählt. true gibt
+# zusätzlich den Zustand einzelner Rechner aus (nur für Störungen gedacht,
+# nicht um Anwesenheit zu prüfen).
+metrics_per_host = false
+# Leer = /metrics ohne Anmeldung (dann nur aus dem internen Netz erreichbar
+# machen), sonst als Bearer-Token mitsenden
+metrics_token = ""
+
+[datenbank]
+# sqlite (Standard), mariadb oder postgresql
+art = "sqlite"
+# Nur bei mariadb/postgresql:
+# adresse = "mysql://stardash:geheim@localhost/stardash"
+# adresse = "postgres://stardash:geheim@localhost/stardash"
+# Protokolle der Berichte als Dateien im Datenordner ("dateien") oder in der
+# Datenbank ("datenbank")
+berichte = "dateien"
+
+[issues]
+# "vorgabe" = Issue auf github.com bei crazmoe/StarCLX bzw. crazmoe/StarCMX
+# "aus"     = kein Knopf „Issue erstellen“
+# "eigene"  = nur die Ziele unten
+modus = "vorgabe"
+# Optional für die Vorgabe: GitHub-Token (Rechte: Issues schreiben, Gists).
+# Ohne Token öffnet StarDash ein vorausgefülltes Issue im Browser.
+# github_token = ""
+
+# Eigene Ziele (mehrere möglich):
+# [[issues.ziel]]
+# name = "IT Telefonie"
+# art = "gitlab"            # github, gitlab, gitea (auch Forgejo)
+# url = "https://gitlab.firma.ch"
+# projekt = "it/telefonie"  # GitHub/Gitea: owner/repo
+# token = ""
+# apps = []                 # leer = alle, sonst z. B. ["StarCMX"]

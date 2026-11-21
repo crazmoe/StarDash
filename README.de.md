@@ -30,6 +30,16 @@ Kein Angebot der STARFACE GmbH. „STARFACE“ wird nur beschreibend verwendet.
 
 > **Stand:** in Entwicklung. Ein Release gibt es noch nicht.
 
+## Installation
+
+Das Debian-Paket für die passende Architektur unter
+[Releases](https://github.com/crazmoe/StarDash/releases) herunterladen und mit
+`sudo apt install ./stardash_<version>_amd64.deb` installieren. Die Einrichtung
+(Firmen-Schlüssel, Zugang zur Weboberfläche, HTTPS davor, Vorgabedatei der
+Clients, Monitoring, Datenschutz) steht in
+[packaging/doc/ANLEITUNG.md](packaging/doc/ANLEITUNG.md), installiert unter
+`/usr/share/doc/stardash/`.
+
 ## Mitmachen
 
 Fehlermeldungen, Ideen und Pull Requests sind willkommen, auf Deutsch oder Englisch. Siehe
