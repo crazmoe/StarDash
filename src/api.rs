@@ -27,10 +27,13 @@ async fn company(app: &App, headers: &HeaderMap) -> Result<i64, Response> {
     };
     match app.db.company_by_token(&auth::hash_token(token)).await {
         Ok(Some(id)) => Ok(id),
-        Ok(None) => Err(error(
-            StatusCode::UNAUTHORIZED,
-            "Firmen-Schlüssel unbekannt",
-        )),
+        Ok(None) => {
+            tracing::warn!("Anfrage mit unbekanntem Firmen-Schlüssel abgelehnt");
+            Err(error(
+                StatusCode::UNAUTHORIZED,
+                "Firmen-Schlüssel unbekannt",
+            ))
+        }
         Err(e) => {
             tracing::error!(error = %e, "Datenbank");
             Err(error(

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Erledigte Berichte zählen nicht mehr als Fehler: Ein Arbeitsplatz wird
+  grün, sobald seine Berichte erledigt sind und die Statusmeldung in Ordnung ist.
+- Neue Befehle `benutzer-liste` und `benutzer-loeschen`. Ein neues Passwort
+  meldet den Benutzer in allen Browsern ab.
+- Anleitung ausführlicher: Rollen, Passwort zurücksetzen, Zustände, Betrieb.
 - Erste Version der Sammelstelle:
   - Empfang von Fehlerberichten und Statusmeldungen der Clients (Schnittstelle v1,
     Anmeldung mit Firmen-Schlüssel)
