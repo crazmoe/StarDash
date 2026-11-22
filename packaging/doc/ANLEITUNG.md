@@ -6,6 +6,8 @@ Weboberfläche. StarDash läuft auf einem Debian- oder Ubuntu-Server der Firma.
 Es schickt nichts an Dritte, ausser der Support erstellt bewusst ein Issue
 (siehe [Issues](#8-issues)).
 
+English version: [GUIDE.md](GUIDE.md).
+
 **Inhalt**
 
 1. [Überblick: wer macht was](#1-überblick-wer-macht-was)
@@ -18,7 +20,7 @@ Es schickt nichts an Dritte, ausser der Support erstellt bewusst ein Issue
 8. [Issues](#8-issues)
 9. [Monitoring](#9-monitoring)
 10. [Betrieb: Update, Sicherung, Fehlersuche, Entfernen](#10-betrieb)
-11. [Datenschutz](#11-datenschutz)
+11. [Datenschutz](#11-datenschutz) und [Lizenz](#lizenz)
 12. [Alle Befehle](#12-alle-befehle)
 
 ---
@@ -78,6 +80,22 @@ zu jedem Wert). Nach einer Änderung:
 sudo systemctl restart stardash
 sudo stardash pruefen      # prüft Einstellungen, Datenbank und Datenordner
 ```
+
+### Sprache
+
+StarDash gibt es auf Deutsch und Englisch.
+
+- **Weboberfläche:** folgt der Sprache des Browsers. Unten auf jeder Seite
+  lässt sie sich mit „Deutsch · English“ umstellen; der Browser merkt sich die
+  Wahl.
+- **Befehle:** folgen der Sprache des Servers (`LANG`, z. B. `de_CH.UTF-8`).
+- **Fest einstellen** für alle: `language = "de"` oder `language = "en"` in
+  der config.toml. Die Umschaltung unten auf der Seite geht trotzdem.
+
+Jeder Befehl hat auch einen englischen Namen (`firma-anlegen` =
+`create-company`, siehe [Alle Befehle](#12-alle-befehle)), ebenso jeder Name
+und Wert in der config.toml (`[datenbank]` = `[database]`, `modus = "aus"` =
+`mode = "off"`; die Datei nennt sie in Klammern).
 
 ## 3. Firma anlegen
 
@@ -226,10 +244,10 @@ Alle Werte der Gruppe `[Support]`:
 |---|---|---|
 | `url` | Adresse von StarDash (mit `https://`) | – (ohne `url` sendet der Client nie etwas) |
 | `token` | Firmen-Schlüssel aus `firma-anlegen` | – |
-| `auto` | Wann der Client von selbst einen Bericht schickt, durch Komma getrennt: `crash` (Absturz), `sip` (Softphone abgemeldet oder SIP-Fehler), `login` (Anmeldung an der Anlage scheitert), `wake` (nach dem Standby keine Verbindung). `aus` = nur per Knopf | alle vier |
-| `verbose` | Ausführliches Protokoll immer an, damit Berichte genug Details haben (`true`/`false`) | `true` |
+| `auto` | Wann der Client von selbst einen Bericht schickt, durch Komma getrennt: `crash` (Absturz), `sip` (Softphone abgemeldet oder SIP-Fehler), `login` (Anmeldung an der Anlage scheitert), `wake` (nach dem Standby keine Verbindung). `aus` (oder `off`, `none`) = nur per Knopf | alle vier |
+| `verbose` | Ausführliches Protokoll immer an, damit Berichte genug Details haben (`true`/`false`, auch `ja`/`yes`/`on`/`1`) | `true` |
 | `heartbeat` | Minuten zwischen Statusmeldungen, `0` = keine | `15` |
-| `internal_numbers` | `unkenntlich` macht auch interne Nummern (Durchwahlen) unkenntlich | lesbar |
+| `internal_numbers` | `unkenntlich` (oder `hidden`) macht auch interne Nummern (Durchwahlen) unkenntlich | lesbar |
 
 Beispiel mit allen Werten:
 
@@ -243,7 +261,7 @@ heartbeat=15
 internal_numbers=unkenntlich
 ```
 
-Die Clients lesen die Datei **beim Start**. Nach einer Änderung StarCLX/StarCMX
+Die Werte gehen auf Deutsch und Englisch. Die Clients lesen die Datei **beim Start**. Nach einer Änderung StarCLX/StarCMX
 neu starten (oder abmelden und wieder anmelden).
 
 Beim ersten Start mit eingetragenem `[Support]` sehen die Mitarbeitenden einmal
@@ -406,22 +424,28 @@ Eine MariaDB- oder PostgreSQL-Datenbank löscht `purge` nicht.
 - Issues mit `modus = "vorgabe"` sind öffentlich. Vor dem Absenden die Vorschau
   prüfen, oder `modus = "aus"` bzw. `"eigene"` wählen.
 
+## Lizenz
+
+StarDash steht unter der MIT-Lizenz. Die Lizenzen aller eingebauten
+Fremdkomponenten stehen in `/usr/share/doc/stardash/THIRD-PARTY-LICENSES.txt`
+und in der Weboberfläche unter **Lizenzen** (unten auf jeder Seite). StarDash
+ist kein Produkt der STARFACE GmbH; „STARFACE“ wird nur beschreibend verwendet.
+
 ## 12. Alle Befehle
 
-```
-stardash [--config DATEI] BEFEHL
+`stardash [--config DATEI] BEFEHL`
 
-serve                         Dienst starten (macht systemd)
-firma-anlegen NAME            Firma anlegen, zeigt den Schlüssel für die Clients
-firma-schluessel NAME         Neuen Schlüssel erzeugen, der alte gilt nicht mehr
-firmen                        Firmen auflisten
-benutzer NAME [ROLLE] [FIRMA] Benutzer anlegen oder Passwort zurücksetzen
-                              (ROLLE: support oder lesen, Standard support;
-                              FIRMA: Name, Standard alle Firmen)
-benutzer-liste                Benutzer auflisten
-benutzer-loeschen NAME        Benutzer löschen und abmelden
-pruefen                       Einstellungen, Datenbank und Datenordner prüfen
---version                     Version zeigen
-```
+| Befehl | Englisch | Was |
+|---|---|---|
+| `serve` | `serve` | Dienst starten (macht systemd) |
+| `firma-anlegen NAME` | `create-company` | Firma anlegen, zeigt den Schlüssel für die Clients |
+| `firma-schluessel NAME` | `company-key` | Neuen Schlüssel erzeugen, der alte gilt nicht mehr |
+| `firmen` | `companies` | Firmen auflisten |
+| `benutzer NAME [ROLLE] [FIRMA]` | `user` | Benutzer anlegen oder Passwort zurücksetzen (ROLLE: `support` oder `lesen`/`read`, Standard `support`; FIRMA: Name, Standard alle Firmen) |
+| `benutzer-liste` | `users` | Benutzer auflisten |
+| `benutzer-loeschen NAME` | `delete-user` | Benutzer löschen und abmelden |
+| `pruefen` | `check` | Einstellungen, Datenbank und Datenordner prüfen |
+| `hilfe` | `help` | Übersicht der Befehle |
+| `--version` | `--version` | Version zeigen |
 
 Befehle, die Firmen oder Benutzer ändern, mit `sudo` ausführen.

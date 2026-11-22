@@ -9,6 +9,7 @@ mod api;
 mod auth;
 mod config;
 mod db;
+mod i18n;
 mod issues;
 mod metrics;
 mod model;
@@ -25,6 +26,7 @@ use axum::routing::{get, post};
 
 use crate::config::{Config, ReportStore};
 use crate::db::Db;
+use crate::i18n::{Lang, fill, pick};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -68,12 +70,23 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/metrics", get(metrics::metrics))
         .merge(web::routes())
         .layer(DefaultBodyLimit::max(limit))
+        .layer(axum::middleware::from_fn_with_state(app.clone(), language))
         .with_state(app)
 }
 
+/// Sprache für die ganze Anfrage
+async fn language(
+    axum::extract::State(app): axum::extract::State<Arc<App>>,
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let lang = web::request_lang(&app.config.language, req.headers());
+    i18n::scope(lang, next.run(req)).await
+}
+
 fn usage() -> ! {
-    eprintln!(
-        "StarDash {VERSION}
+    let text = pick(
+        "StarDash {version}
 
 Aufruf: stardash [--config DATEI] BEFEHL
 
@@ -90,10 +103,48 @@ Befehle:
   pruefen                       Einstellungen, Datenbank und Datenordner prüfen
   --version                     Version zeigen
 
-Einstellungen: {}",
-        config::DEFAULT_PATH
+Alle Befehle gibt es auch auf Englisch (stardash help).
+Einstellungen: {config}",
+        "StarDash {version}
+
+Usage: stardash [--config FILE] COMMAND
+
+Commands:
+  serve                         Run the service (done by systemd)
+  create-company NAME           Create a company, shows the key for the policy file
+  company-key NAME              Generate a new key for a company
+  companies                     List companies
+  user NAME [ROLE] [COMPANY]    Create a web user or reset the password
+                                (ROLE: support or read, default support;
+                                COMPANY: name, default all companies)
+  users                         List web users
+  delete-user NAME              Delete a user and sign them out
+  check                         Check settings, database and data folder
+  --version                     Show the version
+
+All commands also exist in German (stardash hilfe).
+Settings: {config}",
+    );
+    eprintln!(
+        "{}",
+        text.replace("{version}", VERSION)
+            .replace("{config}", config::DEFAULT_PATH)
     );
     std::process::exit(2);
+}
+
+/// Englische Befehle auf die deutschen abbilden
+fn command_name(c: &str) -> &str {
+    match c {
+        "create-company" => "firma-anlegen",
+        "company-key" => "firma-schluessel",
+        "companies" => "firmen",
+        "user" => "benutzer",
+        "users" => "benutzer-liste",
+        "delete-user" => "benutzer-loeschen",
+        "check" => "pruefen",
+        other => other,
+    }
 }
 
 #[tokio::main]
@@ -106,12 +157,13 @@ async fn main() {
         .with_target(false)
         .init();
     if let Err(e) = run().await {
-        eprintln!("Fehler: {e:#}");
+        eprintln!("{}: {e:#}", pick("Fehler", "Error"));
         std::process::exit(1);
     }
 }
 
 async fn run() -> anyhow::Result<()> {
+    i18n::set_default(Lang::from_env());
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let mut config_path = PathBuf::from(config::DEFAULT_PATH);
     if let Some(i) = args.iter().position(|a| a == "--config" || a == "-c") {
@@ -124,14 +176,25 @@ async fn run() -> anyhow::Result<()> {
     let Some(command) = args.first().cloned() else {
         usage();
     };
+    if matches!(command.as_str(), "help" | "hilfe") {
+        i18n::set_default(if command == "help" {
+            Lang::En
+        } else {
+            Lang::De
+        });
+    }
     if matches!(command.as_str(), "--version" | "-V" | "version") {
         println!("stardash {VERSION}");
         return Ok(());
     }
-    if matches!(command.as_str(), "--help" | "-h" | "hilfe") {
+    if matches!(command.as_str(), "--help" | "-h" | "hilfe" | "help") {
         usage();
     }
     let config = Config::load(&config_path)?;
+    if let Some(lang) = Lang::parse(&config.language) {
+        i18n::set_default(lang);
+    }
+    let command = command_name(&command).to_string();
     let db = Db::connect(&config).await?;
     let result = command_run(&command, &args, &config_path, config.clone(), db).await;
     if command != "serve" {
@@ -184,10 +247,19 @@ async fn command_run(
                 .set_company_token(name, &auth::hash_token(&token))
                 .await?
             {
-                anyhow::bail!("Firma „{name}“ nicht gefunden");
+                anyhow::bail!(fill(
+                    pick("Firma „{}“ nicht gefunden", "Company “{}” not found"),
+                    &[name]
+                ));
             }
             print_token(name, &token);
-            println!("Der alte Schlüssel gilt nicht mehr.");
+            println!(
+                "{}",
+                pick(
+                    "Der alte Schlüssel gilt nicht mehr.",
+                    "The old key no longer works."
+                )
+            );
             Ok(())
         }
         "firmen" => {
@@ -198,10 +270,14 @@ async fn command_run(
         }
         "benutzer" => {
             let name = args.get(1).unwrap_or_else(|| usage());
-            let role = args.get(2).map(String::as_str).unwrap_or("support");
-            if !matches!(role, "support" | "lesen") {
-                anyhow::bail!("Rolle muss support oder lesen sein");
-            }
+            let role = match args.get(2).map(String::as_str).unwrap_or("support") {
+                "support" => "support",
+                "lesen" | "read" | "read-only" | "readonly" => "lesen",
+                _ => anyhow::bail!(pick(
+                    "Rolle muss support oder lesen sein",
+                    "Role must be support or read"
+                )),
+            };
             let company = match args.get(3) {
                 None => 0,
                 Some(c) => db
@@ -210,20 +286,44 @@ async fn command_run(
                     .into_iter()
                     .find(|(_, n)| n == c)
                     .map(|(id, _)| id)
-                    .ok_or_else(|| anyhow::anyhow!("Firma „{c}“ nicht gefunden"))?,
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(fill(
+                            pick("Firma „{}“ nicht gefunden", "Company “{}” not found"),
+                            &[c]
+                        ))
+                    })?,
             };
             let password = auth::random_token(9);
             db.add_user(name, &auth::hash_password(&password)?, role, company)
                 .await?;
-            println!("Benutzer: {name}\nPasswort: {password}\nRolle:    {role}");
+            let shown = if role == "lesen" {
+                pick("lesen", "read")
+            } else {
+                role
+            };
+            println!(
+                "{}",
+                fill(
+                    pick(
+                        "Benutzer: {}\nPasswort: {}\nRolle:    {}",
+                        "User:     {}\nPassword: {}\nRole:     {}"
+                    ),
+                    &[name, &password, &shown]
+                )
+            );
             Ok(())
         }
         "benutzer-liste" => {
             for (name, role, company) in db.users().await? {
                 let company = if company.is_empty() {
-                    "alle Firmen"
+                    pick("alle Firmen", "all companies")
                 } else {
                     &company
+                };
+                let role = if role == "lesen" {
+                    pick("lesen", "read")
+                } else {
+                    &role
                 };
                 println!("{name}\t{role}\t{company}");
             }
@@ -232,21 +332,45 @@ async fn command_run(
         "benutzer-loeschen" => {
             let name = args.get(1).unwrap_or_else(|| usage());
             if !db.remove_user(name).await? {
-                anyhow::bail!("Benutzer „{name}“ nicht gefunden");
+                anyhow::bail!(fill(
+                    pick("Benutzer „{}“ nicht gefunden", "User “{}” not found"),
+                    &[name]
+                ));
             }
-            println!("Benutzer {name} gelöscht.");
+            println!(
+                "{}",
+                fill(pick("Benutzer {} gelöscht.", "User {} deleted."), &[name])
+            );
             Ok(())
         }
         "pruefen" => {
-            println!("Einstellungen: {} ok", config_path.display());
-            println!("Datenbank:     {:?} ok", config.database.kind);
+            let label = |de: &'static str, en: &'static str| format!("{:<15}", pick(de, en));
+            println!(
+                "{}{} ok",
+                label("Einstellungen:", "Settings:"),
+                config_path.display()
+            );
+            println!(
+                "{}{:?} ok",
+                label("Datenbank:", "Database:"),
+                config.database.kind
+            );
             let test = config.data_dir.join(".schreibtest");
             tokio::fs::create_dir_all(&config.data_dir).await?;
             tokio::fs::write(&test, b"ok").await?;
             tokio::fs::remove_file(&test).await?;
-            println!("Datenordner:   {} beschreibbar", config.data_dir.display());
-            println!("Firmen:        {}", db.companies().await?.len());
-            println!("Benutzer:      {}", db.user_count().await?);
+            println!(
+                "{}{} {}",
+                label("Datenordner:", "Data folder:"),
+                config.data_dir.display(),
+                pick("beschreibbar", "writable")
+            );
+            println!(
+                "{}{}",
+                label("Firmen:", "Companies:"),
+                db.companies().await?.len()
+            );
+            println!("{}{}", label("Benutzer:", "Users:"), db.user_count().await?);
             Ok(())
         }
         _ => usage(),
@@ -255,7 +379,14 @@ async fn command_run(
 
 fn print_token(name: &str, token: &str) {
     println!(
-        "Firma: {name}\nSchlüssel: {token}\n\nIn die Vorgabedatei der Clients (starclxrc / starcmxrc):\n\n[Support]\nurl=https://<Adresse von StarDash>\ntoken={token}\n\nDer Schlüssel wird nur gehasht gespeichert und lässt sich nicht noch einmal anzeigen."
+        "{}",
+        fill(
+            pick(
+                "Firma: {}\nSchlüssel: {}\n\nIn die Vorgabedatei der Clients (starclxrc / starcmxrc):\n\n[Support]\nurl=https://<Adresse von StarDash>\ntoken={}\n\nDer Schlüssel wird nur gehasht gespeichert und lässt sich nicht noch einmal anzeigen.",
+                "Company: {}\nKey: {}\n\nAdd to the clients' policy file (starclxrc / starcmxrc):\n\n[Support]\nurl=https://<address of StarDash>\ntoken={}\n\nThe key is stored only as a hash and cannot be shown again.",
+            ),
+            &[&name, &token, &token]
+        )
     );
 }
 

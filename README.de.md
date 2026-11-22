@@ -28,7 +28,7 @@ bitten zu müssen.
 
 Kein Angebot der STARFACE GmbH. „STARFACE“ wird nur beschreibend verwendet.
 
-> **Stand:** in Entwicklung. Ein Release gibt es noch nicht.
+> Für StarCLX und StarCMX ab 2.0.0. Weboberfläche und Befehle auf Deutsch und Englisch.
 
 ## Installation
 

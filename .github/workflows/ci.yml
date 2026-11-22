@@ -78,7 +78,12 @@ jobs:
           key: deb-${{ matrix.arch }}
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-deb
+          tool: cargo-deb,cargo-about
+      # Lizenzen der Fremdkomponenten frisch erzeugen (Weboberfläche /lizenzen
+      # und /usr/share/doc/stardash). Bricht ab, wenn eine Abhängigkeit eine
+      # Lizenz hat, die nicht in about.toml steht (z. B. GPL).
+      - name: Lizenzen der Fremdkomponenten
+        run: sh scripts/third-party-licenses.sh
       - name: Version
         id: version
         run: |
@@ -96,11 +101,15 @@ jobs:
         run: |
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ./target/debian/stardash_*.deb
           stardash --version
-          sudo stardash firma-anlegen CI | grep -q '^Schlüssel:'
+          sudo env LANG=de_CH.UTF-8 stardash firma-anlegen CI | grep -q '^Schlüssel:'
           sudo stardash pruefen
+          sudo env LANG=C.UTF-8 stardash check | grep -q '^Settings:'
+          sudo env LANG=C.UTF-8 stardash user ci read CI | grep -q '^Role: *read'
+          test -s /usr/share/doc/stardash/THIRD-PARTY-LICENSES.txt
           sudo -u stardash stardash serve &
           for i in $(seq 1 20); do curl -fs http://127.0.0.1:8470/api/v1/health && break; sleep 1; done
           curl -fs http://127.0.0.1:8470/metrics | grep -q '^stardash_up 1'
+          curl -fs -H 'Accept-Language: en' http://127.0.0.1:8470/lizenzen | grep -q 'not a product of STARFACE GmbH'
           sudo apt-get purge -y stardash
       - uses: actions/upload-artifact@v7
         with:

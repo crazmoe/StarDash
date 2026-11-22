@@ -16,6 +16,7 @@ use axum::routing::{get, post};
 use serde::Deserialize;
 
 use crate::db::{ClientRow, ReportFilter, ReportRow, User, now};
+use crate::i18n::{Lang, fill, t};
 use crate::issues::{self, Created};
 use crate::metrics::Health;
 use crate::model::{REASONS, reason_label, valid_report_id};
@@ -37,6 +38,47 @@ pub fn routes() -> Router<Arc<App>> {
         .route("/berichte/{id}/protokoll", get(report_log))
         .route("/berichte/{id}/status", post(report_state))
         .route("/berichte/{id}/issue", get(issue_form).post(issue_create))
+        .route("/lizenzen", get(licenses))
+        .route("/sprache/{lang}", get(set_language))
+        .route("/language/{lang}", get(set_language))
+}
+
+const LANG_COOKIE: &str = "stardash_lang";
+
+/// Sprache einer Anfrage: Cookie, sonst config.toml, sonst Browser
+pub fn request_lang(config_lang: &str, headers: &HeaderMap) -> Lang {
+    cookie_value(headers, LANG_COOKIE)
+        .and_then(Lang::parse)
+        .or_else(|| Lang::parse(config_lang))
+        .or_else(|| {
+            headers
+                .get(header::ACCEPT_LANGUAGE)
+                .and_then(|v| v.to_str().ok())
+                .and_then(Lang::from_accept)
+        })
+        .unwrap_or_default()
+}
+
+/// Wählt die Sprache per Link und kehrt zur vorigen Seite zurück
+async fn set_language(headers: HeaderMap, Path(lang): Path<String>) -> Response {
+    let lang = Lang::parse(&lang).unwrap_or_default();
+    // nur zurück auf eine Seite von StarDash
+    let back = headers
+        .get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|r| r.split_once("://"))
+        .and_then(|(_, rest)| rest.find('/').map(|i| rest[i..].to_string()))
+        .filter(|p| p.starts_with('/') && !p.starts_with("//"))
+        .unwrap_or_else(|| "/".into());
+    let secure = if https(&headers) { "; Secure" } else { "" };
+    let mut res = Redirect::to(&back).into_response();
+    if let Ok(v) = HeaderValue::from_str(&format!(
+        "{LANG_COOKIE}={}; Path=/; SameSite=Lax; Max-Age=31536000{secure}",
+        lang.code()
+    )) {
+        res.headers_mut().insert(header::SET_COOKIE, v);
+    }
+    res
 }
 
 // ---------------------------------------------------------------------------
@@ -76,25 +118,41 @@ fn when(t: i64) -> String {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
-    format!(
-        "{d:02}.{m:02}.{y} {:02}:{:02} UTC",
-        secs / 3600,
-        secs % 3600 / 60
-    )
+    match crate::i18n::current() {
+        Lang::De => format!(
+            "{d:02}.{m:02}.{y} {:02}:{:02} UTC",
+            secs / 3600,
+            secs % 3600 / 60
+        ),
+        Lang::En => format!(
+            "{y}-{m:02}-{d:02} {:02}:{:02} UTC",
+            secs / 3600,
+            secs % 3600 / 60
+        ),
+    }
 }
 
-fn ago(t: i64) -> String {
-    let d = now() - t;
-    if t <= 0 {
+/// Tag und Monat für die Balken
+fn day_label(t: i64) -> String {
+    let d = when(t);
+    match crate::i18n::current() {
+        Lang::De => d[..6].to_string(),
+        Lang::En => d[5..10].to_string(),
+    }
+}
+
+fn ago(time: i64) -> String {
+    let d = now() - time;
+    if time <= 0 {
         "–".into()
     } else if d < 90 {
-        "gerade eben".into()
+        t("gerade eben").into()
     } else if d < 3600 {
-        format!("vor {} min", d / 60)
+        fill(t("vor {} min"), &[&(d / 60)])
     } else if d < 86_400 * 2 {
-        format!("vor {} h", d / 3600)
+        fill(t("vor {} h"), &[&(d / 3600)])
     } else {
-        format!("vor {} Tagen", d / 86_400)
+        fill(t("vor {} Tagen"), &[&(d / 86_400)])
     }
 }
 
@@ -154,26 +212,63 @@ footer { text-align:center; color:var(--muted); font-size:.8rem; padding:1.5rem;
 fn page(user: Option<&User>, title: &str, body: &str) -> Html<String> {
     let nav = match user {
         Some(u) => format!(
-            r#"<nav><a href="/">Übersicht</a><a href="/arbeitsplaetze">Arbeitsplätze</a><a href="/berichte">Berichte</a></nav>
+            r#"<nav><a href="/">{}</a><a href="/arbeitsplaetze">{}</a><a href="/berichte">{}</a></nav>
 <span class="muted small">{} ({})</span>
-<form method="post" action="/logout"><button class="plain">Abmelden</button></form>"#,
+<form method="post" action="/logout"><button class="plain">{}</button></form>"#,
+            t("Übersicht"),
+            t("Arbeitsplätze"),
+            t("Berichte"),
             e(&u.name),
-            e(&u.role)
+            e(role_label(&u.role)),
+            t("Abmelden")
         ),
         None => String::new(),
     };
     Html(format!(
-        r#"<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{} · StarDash</title><style>{CSS}</style></head>
+        r#"<!doctype html><html lang="{lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{} · StarDash</title><style>{CSS}</style></head>
 <body><header><b>StarDash</b>{nav}</header><main>{body}</main>
-<footer>StarDash {VERSION} · zeigt den Zustand der Programme, nicht das Verhalten von Personen</footer></body></html>"#,
-        e(title)
+<footer>StarDash {VERSION} · {claim}<br><a href="/sprache/de">Deutsch</a> · <a href="/sprache/en">English</a> · <a href="/lizenzen">{lic}</a></footer></body></html>"#,
+        e(title),
+        lang = crate::i18n::current().code(),
+        claim = t("zeigt den Zustand der Programme, nicht das Verhalten von Personen"),
+        lic = t("Lizenzen"),
     ))
+}
+
+/// Lizenz von StarDash und der Fremdkomponenten (ohne Anmeldung lesbar)
+async fn licenses(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
+    let user = user(&app, &headers).await.ok();
+    let b = format!(
+        r#"<h1>{}</h1><p class="notice">{}</p><h2>StarDash</h2><div class="box"><pre class="log">{}</pre></div>
+<h2>{}</h2><p>{}</p><div class="box"><pre class="log">{}</pre></div>"#,
+        t("Lizenzen"),
+        t(
+            "StarDash ist kein Produkt der STARFACE GmbH. „STARFACE“ wird nur beschreibend verwendet."
+        ),
+        e(include_str!("../LICENSE")),
+        t("Fremdkomponenten"),
+        t("StarDash enthält die folgenden Komponenten anderer Urheber unter deren Lizenzen."),
+        e(include_str!("../THIRD-PARTY-LICENSES.txt")),
+    );
+    page(user.as_ref(), t("Lizenzen"), &b).into_response()
+}
+
+fn role_label(role: &str) -> &str {
+    match role {
+        "lesen" => t("lesen"),
+        "support" => t("support"),
+        other => other,
+    }
 }
 
 fn not_found(user: &User) -> Response {
     (
         StatusCode::NOT_FOUND,
-        page(Some(user), "Nicht gefunden", "<h1>Nicht gefunden</h1>"),
+        page(
+            Some(user),
+            t("Nicht gefunden"),
+            &format!("<h1>{}</h1>", t("Nicht gefunden")),
+        ),
     )
         .into_response()
 }
@@ -184,8 +279,8 @@ fn failed(user: &User, err: impl std::fmt::Display) -> Response {
         StatusCode::INTERNAL_SERVER_ERROR,
         page(
             Some(user),
-            "Fehler",
-            &format!("<h1>Fehler</h1><p>{}</p>", e(&err.to_string())),
+            t("Fehler"),
+            &format!("<h1>{}</h1><p>{}</p>", t("Fehler"), e(&err.to_string())),
         ),
     )
         .into_response()
@@ -244,12 +339,15 @@ fn allowed(user: &User, company: i64) -> bool {
 
 async fn login_form(State(app): State<Arc<App>>) -> Html<String> {
     let hint = match app.db.user_count().await {
-        Ok(0) => {
-            r#"<p class="notice">Noch kein Benutzer. Auf dem Server anlegen mit <code>sudo stardash benutzer NAME</code>.</p>"#
-        }
-        _ => "",
+        Ok(0) => format!(
+            r#"<p class="notice">{}</p>"#,
+            t(
+                "Noch kein Benutzer. Auf dem Server anlegen mit <code>sudo stardash benutzer NAME</code>."
+            )
+        ),
+        _ => String::new(),
     };
-    login_page(hint, "")
+    login_page(&hint, "")
 }
 
 fn login_page(hint: &str, error: &str) -> Html<String> {
@@ -260,12 +358,15 @@ fn login_page(hint: &str, error: &str) -> Html<String> {
     };
     page(
         None,
-        "Anmelden",
+        t("Anmelden"),
         &format!(
-            r#"<div class="login box"><h1>Anmelden</h1>{hint}{error}
-<form method="post" action="/login"><label>Benutzer<input name="name" autocomplete="username" required autofocus></label>
-<label>Passwort<input name="password" type="password" autocomplete="current-password" required></label>
-<p><button>Anmelden</button></p></form></div>"#
+            r#"<div class="login box"><h1>{signin}</h1>{hint}{error}
+<form method="post" action="/login"><label>{user}<input name="name" autocomplete="username" required autofocus></label>
+<label>{pw}<input name="password" type="password" autocomplete="current-password" required></label>
+<p><button>{signin}</button></p></form></div>"#,
+            signin = t("Anmelden"),
+            user = t("Benutzer"),
+            pw = t("Passwort"),
         ),
     )
 }
@@ -300,7 +401,7 @@ async fn login(
         tracing::warn!(name = f.name, "Anmeldung abgelehnt");
         return (
             StatusCode::UNAUTHORIZED,
-            login_page("", "Benutzer oder Passwort falsch."),
+            login_page("", t("Benutzer oder Passwort falsch.")),
         )
             .into_response();
     };
@@ -341,9 +442,10 @@ async fn logout(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
 fn version_tag(app: &App, c_app: &str, version: &str) -> String {
     match app.latest(c_app) {
         Some(l) if releases::older(version, &l) => format!(
-            r#"<span class="tag old" title="Neueste Version: {}">{} · veraltet</span>"#,
-            e(&l),
-            e(version)
+            r#"<span class="tag old" title="{}">{} · {}</span>"#,
+            e(&fill(t("Neueste Version: {}"), &[&l])),
+            e(version),
+            t("veraltet")
         ),
         _ => format!(r#"<span class="tag">{}</span>"#, e(version)),
     }
@@ -380,11 +482,12 @@ async fn overview(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
             .entry((c.app.clone(), c.version.clone()))
             .or_default() += 1;
     }
-    let mut b = String::from("<h1>Übersicht</h1><div class=\"cards\">");
+    let mut b = format!("<h1>{}</h1><div class=\"cards\">", t("Übersicht"));
     let _ = write!(
         b,
-        r#"<div class="card"><div class="n">{}</div>Arbeitsplätze</div>"#,
-        clients.len()
+        r#"<div class="card"><div class="n">{}</div>{}</div>"#,
+        clients.len(),
+        t("Arbeitsplätze")
     );
     for h in [Health::Ok, Health::Fehler, Health::NichtErreichbar] {
         let _ = write!(
@@ -399,7 +502,12 @@ async fn overview(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
     b.push_str("</div>");
 
     // Versionen
-    b.push_str("<h2>Versionen im Einsatz</h2><div class=\"box\"><table><tr><th>App</th><th>Version</th><th>Arbeitsplätze</th></tr>");
+    let _ = write!(
+        b,
+        "<h2>{}</h2><div class=\"box\"><table><tr><th>App</th><th>Version</th><th>{}</th></tr>",
+        t("Versionen im Einsatz"),
+        t("Arbeitsplätze")
+    );
     for ((a, v), n) in versions.iter().rev() {
         let _ = write!(
             b,
@@ -411,7 +519,13 @@ async fn overview(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
         );
     }
     if versions.is_empty() {
-        b.push_str(r#"<tr><td colspan="3" class="muted">Noch keine Meldungen. Adresse und Schlüssel in die Vorgabedatei der Clients eintragen (<code>[Support]</code>).</td></tr>"#);
+        let _ = write!(
+            b,
+            r#"<tr><td colspan="3" class="muted">{}</td></tr>"#,
+            t(
+                "Noch keine Meldungen. Adresse und Schlüssel in die Vorgabedatei der Clients eintragen (<code>[Support]</code>)."
+            )
+        );
     }
     b.push_str("</table>");
     if let Ok(latest) = app.latest.read()
@@ -423,8 +537,8 @@ async fn overview(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
             .collect();
         let _ = write!(
             b,
-            r#"<p class="small muted">Neueste Versionen: {}</p>"#,
-            list.join(", ")
+            r#"<p class="small muted">{}</p>"#,
+            fill(t("Neueste Versionen: {}"), &[&list.join(", ")])
         );
     }
     b.push_str("</div>");
@@ -439,18 +553,22 @@ async fn overview(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
         }
     }
     let max = per_day.iter().copied().max().unwrap_or(0).max(1);
-    b.push_str("<h2>Fehler der letzten 7 Tage</h2><div class=\"box\"><div class=\"bars\">");
+    let _ = write!(
+        b,
+        "<h2>{}</h2><div class=\"box\"><div class=\"bars\">",
+        t("Fehler der letzten 7 Tage")
+    );
     for n in per_day {
         let _ = write!(
             b,
-            r#"<div style="height:{}%" title="{n} Fehler"></div>"#,
-            n * 100 / max
+            r#"<div style="height:{}%" title="{}"></div>"#,
+            n * 100 / max,
+            fill(t("{} Fehler"), &[&n])
         );
     }
     b.push_str("</div><div class=\"barlabels\">");
     for i in 0..7 {
-        let d = when((today - 6 + i) * 86_400);
-        let _ = write!(b, "<span>{}</span>", &d[..6]);
+        let _ = write!(b, "<span>{}</span>", day_label((today - 6 + i) * 86_400));
     }
     b.push_str("</div>");
     let by_kind = crate::db::sum_by_kind(&errors);
@@ -469,32 +587,37 @@ async fn overview(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
             .collect();
         let _ = write!(
             b,
-            r#"<p class="small">Nach Art: {}<br>Nach Version: {}</p>"#,
-            kinds.join(" · "),
-            vers.join(" · ")
+            r#"<p class="small">{}<br>{}</p>"#,
+            fill(t("Nach Art: {}"), &[&kinds.join(" · ")]),
+            fill(t("Nach Version: {}"), &[&vers.join(" · ")])
         );
     }
     b.push_str("</div>");
 
     // Neueste Berichte
-    b.push_str("<h2>Neueste Berichte</h2>");
+    let _ = write!(b, "<h2>{}</h2>", t("Neueste Berichte"));
     b.push_str(&report_table(&recent));
-    page(Some(&user), "Übersicht", &b).into_response()
+    page(Some(&user), t("Übersicht"), &b).into_response()
 }
 
 fn kind_label(k: &str) -> String {
     match k {
         "sip" => "Softphone".into(),
-        "login" => "Anmeldung".into(),
-        "connection" => "Verbindung".into(),
+        "login" => t("Anmeldung").into(),
+        "connection" => t("Verbindung").into(),
         "audio" => "Audio".into(),
         other => other.into(),
     }
 }
 
 fn report_table(rows: &[ReportRow]) -> String {
-    let mut b = String::from(
-        r#"<div class="box"><table><tr><th>Nr.</th><th>Erhalten</th><th>Anlass</th><th>Arbeitsplatz</th><th>Version</th><th>Text</th><th></th></tr>"#,
+    let mut b = format!(
+        r#"<div class="box"><table><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th><th>Version</th><th>{}</th><th></th></tr>"#,
+        t("Nr."),
+        t("Erhalten"),
+        t("Anlass"),
+        t("Arbeitsplatz"),
+        t("Text")
     );
     for r in rows {
         let text = if r.comment.is_empty() {
@@ -512,7 +635,7 @@ fn report_table(rows: &[ReportRow]) -> String {
             e(&r.version),
             e(crate::db::cut(text, 120)),
             if r.done {
-                "<span class=\"ok small\">erledigt</span>".to_string()
+                format!("<span class=\"ok small\">{}</span>", t("erledigt"))
             } else if !r.issue_url.is_empty() {
                 "<span class=\"small\">Issue</span>".to_string()
             } else {
@@ -522,7 +645,11 @@ fn report_table(rows: &[ReportRow]) -> String {
         );
     }
     if rows.is_empty() {
-        b.push_str(r#"<tr><td colspan="7" class="muted">Keine Berichte.</td></tr>"#);
+        let _ = write!(
+            b,
+            r#"<tr><td colspan="7" class="muted">{}</td></tr>"#,
+            t("Keine Berichte.")
+        );
     }
     b.push_str("</table></div>");
     b
@@ -556,7 +683,7 @@ fn client_state(c: &ClientRow, h: Health) -> String {
         return format!(r#"<span class="muted">{}</span>"#, h.label());
     }
     let mut s = vec![
-        yes(c.pbx_connected, "Anlage"),
+        yes(c.pbx_connected, t("Anlage")),
         yes(c.chat_connected, "Chat"),
     ];
     if c.softphone_enabled {
@@ -593,14 +720,16 @@ async fn clients(
                 || c.pbx.contains(&q.q)
         })
         .collect();
-    let mut b = String::from("<h1>Arbeitsplätze</h1>");
+    let mut b = format!("<h1>{}</h1>", t("Arbeitsplätze"));
     let _ = write!(
         b,
-        r#"<form class="filters" method="get"><input name="q" placeholder="Rechnername" value="{}">
-<select name="zustand"><option value="">Alle Zustände</option>{}</select>
+        r#"<form class="filters" method="get"><input name="q" placeholder="{}" value="{}">
+<select name="zustand"><option value="">{}</option>{}</select>
 <input name="app" placeholder="App" value="{}" size="8"><input name="version" placeholder="Version" value="{}" size="8">
-<button>Filtern</button> <a href="/arbeitsplaetze">zurücksetzen</a></form>"#,
+<button>{}</button> <a href="/arbeitsplaetze">{}</a></form>"#,
+        t("Rechnername"),
         e(&q.q),
+        t("Alle Zustände"),
         [
             Health::Ok,
             Health::Fehler,
@@ -620,9 +749,19 @@ async fn clients(
         ))
         .collect::<String>(),
         e(&q.app),
-        e(&q.version)
+        e(&q.version),
+        t("Filtern"),
+        t("zurücksetzen")
     );
-    b.push_str(r#"<div class="box"><table><tr><th>Rechner</th><th>App</th><th>Version</th><th>System</th><th>Anlage</th><th>Zustand</th><th>Letzte Meldung</th><th>Offene Berichte 24 h</th></tr>"#);
+    let _ = write!(
+        b,
+        r#"<div class="box"><table><tr><th>{}</th><th>App</th><th>Version</th><th>System</th><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr>"#,
+        t("Rechner"),
+        t("Anlage"),
+        t("Zustand"),
+        t("Letzte Meldung"),
+        t("Offene Berichte 24 h")
+    );
     for c in &list {
         let h = Health::of(c, off);
         let _ = write!(
@@ -651,16 +790,19 @@ async fn clients(
         );
     }
     if list.is_empty() {
-        b.push_str(r#"<tr><td colspan="8" class="muted">Keine Arbeitsplätze.</td></tr>"#);
+        let _ = write!(
+            b,
+            r#"<tr><td colspan="8" class="muted">{}</td></tr>"#,
+            t("Keine Arbeitsplätze.")
+        );
     }
     b.push_str("</table></div>");
     let _ = write!(
         b,
-        r#"<p class="small muted">{} von {} Arbeitsplätzen</p>"#,
-        list.len(),
-        all.len()
+        r#"<p class="small muted">{}</p>"#,
+        fill(t("{} von {} Arbeitsplätzen"), &[&list.len(), &all.len()])
     );
-    page(Some(&user), "Arbeitsplätze", &b).into_response()
+    page(Some(&user), t("Arbeitsplätze"), &b).into_response()
 }
 
 async fn client(
@@ -698,42 +840,45 @@ async fn client(
         e(&c.app)
     );
     let rows = [
-        ("Zustand", format!("{} {}", h.label(), client_state(&c, h))),
+        (
+            t("Zustand"),
+            format!("{} {}", h.label(), client_state(&c, h)),
+        ),
         ("Version", version_tag(&app, &c.app, &c.version)),
         ("System", e(&c.os)),
-        ("Paket", e(&c.package)),
-        ("Anlage", format!("{} {}", e(&c.pbx), e(&c.pbx_version))),
+        (t("Paket"), e(&c.package)),
+        (t("Anlage"), format!("{} {}", e(&c.pbx), e(&c.pbx_version))),
         (
-            "Softphone eingerichtet",
+            t("Softphone eingerichtet"),
             if c.softphone_enabled {
-                "ja".into()
+                t("ja").into()
             } else {
-                "nein".into()
+                t("nein").into()
             },
         ),
         (
-            "Letzte Meldung",
+            t("Letzte Meldung"),
             format!("{} ({})", when(c.last_seen), ago(c.last_seen)),
         ),
         (
-            "Läuft seit",
+            t("Läuft seit"),
             if c.uptime_secs > 0 {
                 format!("{} h", c.uptime_secs / 3600)
             } else {
                 "–".into()
             },
         ),
-        ("Letzter Fehler", when(c.last_error)),
-        ("Zuerst gesehen", when(c.first_seen)),
+        (t("Letzter Fehler"), when(c.last_error)),
+        (t("Zuerst gesehen"), when(c.first_seen)),
         (
-            "Installations-Kennung",
+            t("Installations-Kennung"),
             format!("<code>{}</code>", e(&c.install_id)),
         ),
     ];
     for (k, v) in rows {
         let _ = write!(b, "<tr><th>{k}</th><td>{v}</td></tr>");
     }
-    b.push_str("</table></div><h2>Berichte</h2>");
+    let _ = write!(b, "</table></div><h2>{}</h2>", t("Berichte"));
     b.push_str(&report_table(&reports));
     page(Some(&user), &c.hostname, &b).into_response()
 }
@@ -785,25 +930,31 @@ async fn reports(
         Ok(r) => r,
         Err(err) => return failed(&user, err),
     };
-    let mut b = String::from("<h1>Berichte</h1>");
+    let mut b = format!("<h1>{}</h1>", t("Berichte"));
     let _ = write!(
         b,
-        r#"<form class="filters" method="get"><input name="q" placeholder="Bericht-Nr., Rechner oder Version" value="{}" size="28">
-<select name="anlass"><option value="">Alle Anlässe</option>{}</select>
-<label><input type="checkbox" name="offen" value="1"{}> nur offene</label>
-<button>Suchen</button> <a href="/berichte">zurücksetzen</a></form>"#,
+        r#"<form class="filters" method="get"><input name="q" placeholder="{}" value="{}" size="28">
+<select name="anlass"><option value="">{}</option>{}</select>
+<label><input type="checkbox" name="offen" value="1"{}> {}</label>
+<button>{}</button> <a href="/berichte">{}</a></form>"#,
+        t("Bericht-Nr., Rechner oder Version"),
         e(&q.q),
+        t("Alle Anlässe"),
         REASONS
             .iter()
             .map(|(k, l)| format!(
-                r#"<option value="{k}"{}>{l}</option>"#,
-                if q.anlass == *k { " selected" } else { "" }
+                r#"<option value="{k}"{}>{}</option>"#,
+                if q.anlass == *k { " selected" } else { "" },
+                t(l)
             ))
             .collect::<String>(),
-        if q.offen == "1" { " checked" } else { "" }
+        if q.offen == "1" { " checked" } else { "" },
+        t("nur offene"),
+        t("Suchen"),
+        t("zurücksetzen")
     );
     b.push_str(&report_table(&rows));
-    page(Some(&user), "Berichte", &b).into_response()
+    page(Some(&user), t("Berichte"), &b).into_response()
 }
 
 async fn load_report(app: &App, user: &User, id: &str) -> Result<ReportRow, Response> {
@@ -869,13 +1020,14 @@ async fn report(
     let log = log_text(&app, &r).await;
     let problems = issues::problem_lines(&log, 30);
     let mut b = format!(
-        r#"<h1>Bericht <code>{}</code> · {}</h1><div class="box"><table>"#,
+        r#"<h1>{} <code>{}</code> · {}</h1><div class="box"><table>"#,
+        t("Bericht"),
         e(&r.id),
         e(reason_label(&r.reason))
     );
     let rows = [
         (
-            "Arbeitsplatz",
+            t("Arbeitsplatz"),
             format!(
                 r#"<a href="/arbeitsplaetze/{}/{}">{}</a>"#,
                 r.company,
@@ -888,14 +1040,17 @@ async fn report(
             format!("{} {}", e(&r.app), version_tag(&app, &r.app, &r.version)),
         ),
         ("System", format!("{} · {}", e(&r.os), e(&r.package))),
-        ("Anlage", format!("{} {}", e(&r.pbx), e(&r.pbx_version))),
+        (t("Anlage"), format!("{} {}", e(&r.pbx), e(&r.pbx_version))),
         (
-            "Zeit",
-            format!("{} (erhalten {})", when(r.time as i64), ago(r.received)),
+            t("Zeit"),
+            fill(
+                t("{} (erhalten {})"),
+                &[&when(r.time as i64), &ago(r.received)],
+            ),
         ),
-        ("Meldung", e(&r.summary)),
+        (t("Meldung"), e(&r.summary)),
         (
-            "Text des Benutzers",
+            t("Text des Benutzers"),
             if r.comment.is_empty() {
                 "–".into()
             } else {
@@ -903,11 +1058,12 @@ async fn report(
             },
         ),
         (
-            "Protokoll",
+            t("Protokoll"),
             format!(
-                r#"{} · <a href="/berichte/{}/protokoll">herunterladen</a>"#,
+                r#"{} · <a href="/berichte/{}/protokoll">{}</a>"#,
                 size(r.log_size),
-                e(&r.id)
+                e(&r.id),
+                t("herunterladen")
             ),
         ),
         (
@@ -929,35 +1085,57 @@ async fn report(
     if user.may_edit() {
         let _ = write!(
             b,
-            r#"<h2>Bearbeitung</h2><div class="box"><form method="post" action="/berichte/{id}/status">
-<p><label><input type="checkbox" name="done" value="1"{}> erledigt</label></p>
-<p><textarea name="note" rows="2" placeholder="Notiz für den Support">{}</textarea></p>
-<p><button>Speichern</button>{}</p></form></div>"#,
+            r#"<h2>{}</h2><div class="box"><form method="post" action="/berichte/{id}/status">
+<p><label><input type="checkbox" name="done" value="1"{}> {}</label></p>
+<p><textarea name="note" rows="2" placeholder="{}">{}</textarea></p>
+<p><button>{}</button>{}</p></form></div>"#,
+            t("Bearbeitung"),
             if r.done { " checked" } else { "" },
+            t("erledigt"),
+            t("Notiz für den Support"),
             e(&r.note),
+            t("Speichern"),
             if issues::targets(&app.config, &r.app).is_empty() {
                 String::new()
             } else {
                 format!(
-                    r#" &nbsp; <a class="button" href="/berichte/{}/issue">Issue erstellen</a>"#,
-                    e(&r.id)
+                    r#" &nbsp; <a class="button" href="/berichte/{}/issue">{}</a>"#,
+                    e(&r.id),
+                    t("Issue erstellen")
                 )
             },
             id = e(&r.id)
         );
     } else if !r.note.is_empty() {
-        let _ = write!(b, r#"<h2>Notiz</h2><div class="box">{}</div>"#, e(&r.note));
+        let _ = write!(
+            b,
+            r#"<h2>{}</h2><div class="box">{}</div>"#,
+            t("Notiz"),
+            e(&r.note)
+        );
     }
     if !problems.is_empty() {
-        b.push_str(r#"<h2>Fehler und Warnungen</h2><div class="box"><pre class="log">"#);
+        let _ = write!(
+            b,
+            r#"<h2>{}</h2><div class="box"><pre class="log">"#,
+            t("Fehler und Warnungen")
+        );
         b.push_str(&highlight(&problems.join("\n")));
         b.push_str("</pre></div>");
     }
-    b.push_str(r#"<h2>Protokoll</h2><div class="box"><pre class="log">"#);
+    let _ = write!(
+        b,
+        r#"<h2>{}</h2><div class="box"><pre class="log">"#,
+        t("Protokoll")
+    );
     b.push_str(&highlight(issues::excerpt(&log)));
     b.push_str("</pre>");
     if log.len() > issues::EXCERPT_MAX {
-        b.push_str(r#"<p class="small muted">Gezeigt wird der neueste Teil; das ganze Protokoll gibt es zum Herunterladen.</p>"#);
+        let _ = write!(
+            b,
+            r#"<p class="small muted">{}</p>"#,
+            t("Gezeigt wird der neueste Teil; das ganze Protokoll gibt es zum Herunterladen.")
+        );
     }
     b.push_str("</div>");
     page(Some(&user), &r.id, &b).into_response()
@@ -1062,16 +1240,24 @@ async fn issue_form(
     let (title, mut body) = issues::draft(&r);
     let problems = issues::problem_lines(&log, 15);
     if !problems.is_empty() {
-        body.push_str("\n**Fehler und Warnungen:**\n\n```text\n");
+        body.push('\n');
+        body.push_str(t("**Fehler und Warnungen:**"));
+        body.push_str("\n\n```text\n");
         body.push_str(&problems.join("\n").replace("```", "'''"));
         body.push_str("\n```\n");
     }
     let mut b = format!(
-        r#"<h1>Issue erstellen · Bericht <code>{}</code></h1>"#,
+        r#"<h1>{} · {} <code>{}</code></h1>"#,
+        t("Issue erstellen"),
+        t("Bericht"),
         e(&r.id)
     );
     if targets.len() > 1 {
-        b.push_str(r#"<form class="filters" method="get"><label>Ziel <select name="ziel" onchange="this.form.submit()">"#);
+        let _ = write!(
+            b,
+            r#"<form class="filters" method="get"><label>{} <select name="ziel" onchange="this.form.submit()">"#,
+            t("Ziel")
+        );
         for t in &targets {
             let _ = write!(
                 b,
@@ -1081,32 +1267,59 @@ async fn issue_form(
                 e(&t.label())
             );
         }
-        b.push_str("</select></label> <noscript><button>Wählen</button></noscript></form>");
+        let _ = write!(
+            b,
+            "</select></label> <noscript><button>{}</button></noscript></form>",
+            t("Wählen")
+        );
     } else {
-        let _ = write!(b, "<p>Ziel: <strong>{}</strong></p>", e(&chosen.label()));
+        let _ = write!(
+            b,
+            "<p>{}: <strong>{}</strong></p>",
+            t("Ziel"),
+            e(&chosen.label())
+        );
     }
     if chosen.public {
-        b.push_str(r#"<p class="notice"><strong>Öffentlich:</strong> Issues in diesem Repository kann jeder im Internet lesen. Prüfe Titel, Text und Protokoll unten, bevor du absendest. Interne Nummern stehen standardmässig im Klartext; mit dem Häkchen werden sie unkenntlich.</p>"#);
+        let _ = write!(
+            b,
+            r#"<p class="notice">{}</p>"#,
+            t(
+                "<strong>Öffentlich:</strong> Issues in diesem Repository kann jeder im Internet lesen. Prüfe Titel, Text und Protokoll unten, bevor du absendest. Interne Nummern stehen standardmässig im Klartext; mit dem Häkchen werden sie unkenntlich."
+            )
+        );
     }
     if chosen.kind == crate::config::TargetKind::Github && chosen.token.is_empty() {
-        b.push_str(r#"<p class="notice">Für dieses Ziel ist kein Token eingetragen: StarDash öffnet das vorausgefüllte Issue in deinem Browser, wo du es mit deinem GitHub-Konto absendest. Das Protokoll lädst du vorher herunter und hängst es dort an.</p>"#);
+        let _ = write!(
+            b,
+            r#"<p class="notice">{}</p>"#,
+            t(
+                "Für dieses Ziel ist kein Token eingetragen: StarDash öffnet das vorausgefüllte Issue in deinem Browser, wo du es mit deinem GitHub-Konto absendest. Das Protokoll lädst du vorher herunter und hängst es dort an."
+            )
+        );
     }
     let _ = write!(
         b,
         r#"<form method="post" action="/berichte/{id}/issue"><input type="hidden" name="ziel" value="{}">
-<div class="box"><p><label>Titel<br><input name="title" value="{}" style="width:100%" required></label></p>
-<p><label>Text<br><textarea name="body" rows="14">{}</textarea></label></p>
-<p><label>Protokoll (wird angehängt; du kannst Zeilen entfernen)<br><textarea class="log" name="log" rows="18">{}</textarea></label></p>
-<p><label><input type="checkbox" name="hide_internal" value="1"{}> Interne Nummern unkenntlich machen</label></p>
-<p><button>Issue erstellen</button> <a href="/berichte/{id}">Abbrechen</a></p></div></form>"#,
+<div class="box"><p><label>{l_title}<br><input name="title" value="{}" style="width:100%" required></label></p>
+<p><label>{l_text}<br><textarea name="body" rows="14">{}</textarea></label></p>
+<p><label>{l_log}<br><textarea class="log" name="log" rows="18">{}</textarea></label></p>
+<p><label><input type="checkbox" name="hide_internal" value="1"{}> {l_hide}</label></p>
+<p><button>{l_create}</button> <a href="/berichte/{id}">{l_cancel}</a></p></div></form>"#,
         chosen.id,
         e(&title),
         e(&body),
         e(issues::excerpt(&log)),
         if chosen.public { " checked" } else { "" },
         id = e(&r.id),
+        l_title = t("Titel"),
+        l_text = t("Text"),
+        l_log = t("Protokoll (wird angehängt; du kannst Zeilen entfernen)"),
+        l_hide = t("Interne Nummern unkenntlich machen"),
+        l_create = t("Issue erstellen"),
+        l_cancel = t("Abbrechen"),
     );
-    page(Some(&user), "Issue erstellen", &b).into_response()
+    page(Some(&user), t("Issue erstellen"), &b).into_response()
 }
 
 #[derive(Deserialize)]
@@ -1158,14 +1371,21 @@ async fn issue_create(
         }
         Ok(Created::Browser(url)) => {
             let b = format!(
-                r#"<h1>Issue im Browser absenden</h1><div class="box"><ol>
-<li><a href="/berichte/{id}/protokoll">Protokoll herunterladen</a></li>
-<li><a class="button" href="{url}" target="_blank" rel="noreferrer">Vorausgefülltes Issue öffnen</a></li>
-<li>Dort die Protokolldatei in das Textfeld ziehen und absenden.</li>
-<li>Den Link des Issues hier eintragen:</li></ol>
+                r#"<h1>{h}</h1><div class="box"><ol>
+<li><a href="/berichte/{id}/protokoll">{dl}</a></li>
+<li><a class="button" href="{url}" target="_blank" rel="noreferrer">{open}</a></li>
+<li>{drag}</li>
+<li>{link}</li></ol>
 <form method="post" action="/berichte/{id}/status">{done}
-<p class="small muted">(Optional) Link zum Issue als Notiz speichern:</p>
-<p><input name="note" value="{note}" style="width:100%" placeholder="https://github.com/…/issues/…"></p><p><button>Speichern</button></p></form></div>"#,
+<p class="small muted">{opt}</p>
+<p><input name="note" value="{note}" style="width:100%" placeholder="https://github.com/…/issues/…"></p><p><button>{save}</button></p></form></div>"#,
+                h = t("Issue im Browser absenden"),
+                dl = t("Protokoll herunterladen"),
+                open = t("Vorausgefülltes Issue öffnen"),
+                drag = t("Dort die Protokolldatei in das Textfeld ziehen und absenden."),
+                link = t("Den Link des Issues hier eintragen:"),
+                opt = t("(Optional) Link zum Issue als Notiz speichern:"),
+                save = t("Speichern"),
                 id = e(&r.id),
                 url = e(&url),
                 note = e(&r.note),
@@ -1175,17 +1395,19 @@ async fn issue_create(
                     ""
                 },
             );
-            page(Some(&user), "Issue im Browser", &b).into_response()
+            page(Some(&user), t("Issue im Browser"), &b).into_response()
         }
         Err(err) => {
             tracing::warn!(error = %err, "Issue nicht erstellt");
             page(
                 Some(&user),
-                "Issue nicht erstellt",
+                t("Issue nicht erstellt"),
                 &format!(
-                    r#"<h1>Issue nicht erstellt</h1><p class="bad">{}</p><p><a href="/berichte/{}/issue">Zurück</a></p>"#,
+                    r#"<h1>{}</h1><p class="bad">{}</p><p><a href="/berichte/{}/issue">{}</a></p>"#,
+                    t("Issue nicht erstellt"),
                     e(&err.to_string()),
-                    e(&r.id)
+                    e(&r.id),
+                    t("Zurück")
                 ),
             )
             .into_response()

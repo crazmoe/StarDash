@@ -8,6 +8,7 @@
 //! vorausgefülltes Issue im Browser des Supports; das Protokoll lädt der
 //! Support dann selbst herunter und hängt es an.
 
+use crate::i18n::{fill, t as tr};
 use std::sync::OnceLock;
 
 use regex::Regex;
@@ -63,7 +64,7 @@ pub fn targets(config: &Config, app: &str) -> Vec<Target> {
             .unwrap_or("crazmoe/StarCLX");
         out.push(Target {
             id: 0,
-            name: "Entwickler von StarCLX/StarCMX/StarMAC".into(),
+            name: tr("Entwickler von StarCLX/StarCMX/StarMAC").into(),
             kind: TargetKind::Github,
             url: "https://github.com".into(),
             project: repo.into(),
@@ -107,7 +108,8 @@ pub fn draft(r: &ReportRow) -> (String, String) {
     let title = format!("{} {}: {}", r.app, r.version, crate::db::cut(&what, 120));
     let mut body = String::new();
     if !r.comment.is_empty() {
-        body.push_str("**Was ist passiert (Benutzer):**\n\n");
+        body.push_str(tr("**Was ist passiert (Benutzer):**"));
+        body.push_str("\n\n");
         for line in r.comment.lines() {
             body.push_str("> ");
             body.push_str(line);
@@ -116,18 +118,23 @@ pub fn draft(r: &ReportRow) -> (String, String) {
         body.push('\n');
     }
     body.push_str(&format!(
-        "| | |\n|---|---|\n| Anlass | {} |\n| {} | {} |\n| Betriebssystem | {} |\n| Paket | {} |\n| STARFACE | {} |\n| Bericht | {} (StarDash) |\n",
+        "| | |\n|---|---|\n| {} | {} |\n| {} | {} |\n| {} | {} |\n| {} | {} |\n| STARFACE | {} |\n| {} | {} (StarDash) |\n",
+        tr("Anlass"),
         reason_label(&r.reason),
         r.app,
         r.version,
+        tr("Betriebssystem"),
         r.os,
+        tr("Paket"),
         r.package,
         if r.pbx_version.is_empty() { "?" } else { &r.pbx_version },
+        tr("Bericht"),
         r.id,
     ));
     if !r.summary.is_empty() && r.reason != "manual" {
         body.push_str(&format!(
-            "\n**Meldung:** `{}`\n",
+            "\n{} `{}`\n",
+            tr("**Meldung:**"),
             r.summary.replace('`', "'")
         ));
     }
@@ -245,7 +252,12 @@ async fn github(
     if t.token.is_empty() {
         let mut text = body.to_string();
         text.push_str(&format!(
-            "\n**Protokoll:** bitte die Datei `{file}` aus StarDash herunterladen und hier anhängen.\n"
+            "\n{} {}\n",
+            tr("**Protokoll:**"),
+            fill(
+                tr("bitte die Datei `{}` aus StarDash herunterladen und hier anhängen."),
+                &[&file]
+            )
         ));
         let text = crate::db::cut(&text, BROWSER_BODY_MAX);
         let url = format!(
@@ -265,14 +277,14 @@ async fn github(
             .json(&serde_json::json!({
                 "description": title,
                 "public": false,
-                "files": { file: { "content": if log.is_empty() { "(leer)" } else { log } } }
+                "files": { file: { "content": if log.is_empty() { tr("(leer)") } else { log } } }
             }))
             .send()
             .await?,
     )
     .await?;
     let gist_url = gist["html_url"].as_str().unwrap_or_default();
-    let text = format!("{body}\n**Protokoll:** {gist_url}\n");
+    let text = format!("{body}\n{} {gist_url}\n", tr("**Protokoll:**"));
     let issue = check(
         http.post(format!("{api}/repos/{}/issues", t.project))
             .bearer_auth(&t.token)
@@ -314,7 +326,7 @@ async fn gitlab(
             .header("PRIVATE-TOKEN", &t.token)
             .json(&serde_json::json!({
                 "title": title,
-                "description": format!("{body}\n**Protokoll:** {markdown}\n"),
+                "description": format!("{body}\n{} {markdown}\n", tr("**Protokoll:**")),
             }))
             .send()
             .await?,

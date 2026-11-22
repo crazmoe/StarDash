@@ -38,12 +38,25 @@ fi
 #DEBHELPER#
 
 if [ "$1" = "configure" ] && [ -z "$2" ]; then
-    cat <<'TEXT'
+    case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in
+    de*)
+        cat <<'TEXT'
 
 StarDash ist installiert. Nächste Schritte:
   sudo stardash firma-anlegen "Meine Firma"   # Schlüssel für die Clients
   sudo stardash benutzer admin                # Zugang zur Weboberfläche
-  Webserver mit HTTPS davor: /usr/share/doc/stardash/
+  Webserver mit HTTPS davor und Anleitung: /usr/share/doc/stardash/ANLEITUNG.md
 TEXT
+        ;;
+    *)
+        cat <<'TEXT'
+
+StarDash is installed. Next steps:
+  sudo stardash create-company "My Company"   # key for the clients
+  sudo stardash user admin                    # access to the web interface
+  HTTPS web server in front and guide: /usr/share/doc/stardash/GUIDE.md
+TEXT
+        ;;
+    esac
 fi
 exit 0
