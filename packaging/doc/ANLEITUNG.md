@@ -357,13 +357,53 @@ zusätzlich den Zustand einzelner Rechner aus (für Störungen gedacht, nicht um
 Anwesenheit zu prüfen).
 
 Ohne `metrics_token` ist `/metrics` ohne Anmeldung lesbar. Dann den Pfad im
-Webserver auf das interne Netz beschränken oder ein Token setzen:
+Webserver auf das interne Netz beschränken oder ein Token setzen.
 
-```toml
-metrics_token = "langes-zufälliges-token"
+**Token anlegen:**
+
+1. Ein zufälliges Token erzeugen (beliebiger langer Text, z. B. 64 Zeichen):
+
+   ```sh
+   openssl rand -hex 32
+   ```
+
+2. Das Ergebnis in `/etc/stardash/config.toml` eintragen:
+
+   ```toml
+   metrics_token = "3f9c…(Ausgabe von openssl)…"
+   ```
+
+3. Dienst neu starten: `sudo systemctl restart stardash`
+
+4. Prüfen: ohne Token antwortet `/metrics` jetzt mit `401`, mit Token mit den Werten.
+
+   ```sh
+   curl -i https://stardash.firma.ch/metrics
+   curl -H "Authorization: Bearer 3f9c…" https://stardash.firma.ch/metrics
+   ```
+
+**Im Monitoring eintragen:** Das Monitoring sendet das Token im Kopf
+`Authorization: Bearer <token>`. Beispiel Prometheus:
+
+```yaml
+scrape_configs:
+  - job_name: stardash
+    scheme: https
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials: "3f9c…"
+    static_configs:
+      - targets: ["stardash.firma.ch"]
 ```
 
-Das Monitoring sendet es als `Authorization: Bearer langes-zufälliges-token`.
+Zabbix (HTTP-Agent), Checkmk und Icinga haben dafür ein Feld für eigene
+Kopfzeilen: `Authorization` mit dem Wert `Bearer 3f9c…`.
+
+**Token wechseln:** neues Token erzeugen, in `config.toml` ersetzen, Dienst neu
+starten und im Monitoring nachtragen. Das alte Token gilt danach nicht mehr.
+Das Token betrifft nur `/metrics`, nicht die Clients (die haben den
+Firmenschlüssel) und nicht die Anmeldung an der Weboberfläche.
 
 ## 10. Betrieb
 
