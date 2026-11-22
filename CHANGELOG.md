@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0
+
+- Plattform (Windows, Linux, macOS) je Arbeitsplatz, aus Paketart und System
+  abgeleitet, unabhängig vom Programmnamen: Spalte in der Übersicht
+  „Versionen im Einsatz“, Filter und Anzeige bei den Arbeitsplätzen
+- Metriken mit Label `plattform` (`stardash_clients`, `…_softphone_registriert`,
+  `…_anlage_verbunden`, `…_chat_verbunden`, `…_veraltet`, `stardash_client_ok`)
+- Vorbereitung für StarCLX unter Windows: Versionsabgleich und Issues laufen
+  über den Programmnamen, ältere StarCMX-Clients bleiben unterstützt
+
+/ Platform per workstation (Windows, Linux, macOS) in overview, workstation
+filter and metrics (label `plattform`), independent of the app name.
+
 ## 1.0.0
 
 Erste Version / first release.

@@ -355,7 +355,7 @@ apps = []                   # empty = all, otherwise e.g. ["StarCMX"]
 `https://stardash.example.com/metrics` provides figures in Prometheus format
 (readable by Prometheus, Grafana, Zabbix, Checkmk, Icinga):
 
-- workstations per app, version and state (ok, error, unreachable)
+- workstations per app, platform (Windows, Linux, macOS), version and state (ok, error, unreachable)
 - registered softphones, outdated versions
 - errors today by kind, stored reports per reason
 

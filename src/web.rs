@@ -473,13 +473,13 @@ async fn overview(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
         .unwrap_or_default();
 
     let mut health: BTreeMap<Health, usize> = BTreeMap::new();
-    let mut versions: BTreeMap<(String, String), usize> = BTreeMap::new();
+    let mut versions: BTreeMap<(String, &str, String), usize> = BTreeMap::new();
     for c in &clients {
         *health
             .entry(Health::of(c, app.config.offline_after_minutes))
             .or_default() += 1;
         *versions
-            .entry((c.app.clone(), c.version.clone()))
+            .entry((c.app.clone(), c.platform(), c.version.clone()))
             .or_default() += 1;
     }
     let mut b = format!("<h1>{}</h1><div class=\"cards\">", t("Übersicht"));
@@ -504,24 +504,27 @@ async fn overview(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
     // Versionen
     let _ = write!(
         b,
-        "<h2>{}</h2><div class=\"box\"><table><tr><th>App</th><th>Version</th><th>{}</th></tr>",
+        "<h2>{}</h2><div class=\"box\"><table><tr><th>App</th><th>{}</th><th>Version</th><th>{}</th></tr>",
         t("Versionen im Einsatz"),
+        t("Plattform"),
         t("Arbeitsplätze")
     );
-    for ((a, v), n) in versions.iter().rev() {
+    for ((a, p, v), n) in versions.iter().rev() {
         let _ = write!(
             b,
-            r#"<tr><td>{}</td><td>{}</td><td><a href="/arbeitsplaetze?app={}&version={}">{n}</a></td></tr>"#,
+            r#"<tr><td>{}</td><td>{}</td><td>{}</td><td><a href="/arbeitsplaetze?app={}&amp;plattform={}&amp;version={}">{n}</a></td></tr>"#,
             e(a),
+            e(p),
             version_tag(&app, a, v),
             urlencoding::encode(a),
+            urlencoding::encode(p),
             urlencoding::encode(v)
         );
     }
     if versions.is_empty() {
         let _ = write!(
             b,
-            r#"<tr><td colspan="3" class="muted">{}</td></tr>"#,
+            r#"<tr><td colspan="4" class="muted">{}</td></tr>"#,
             t(
                 "Noch keine Meldungen. Adresse und Schlüssel in die Vorgabedatei der Clients eintragen (<code>[Support]</code>)."
             )
@@ -667,6 +670,8 @@ struct ClientQuery {
     #[serde(default)]
     zustand: String,
     #[serde(default)]
+    plattform: String,
+    #[serde(default)]
     q: String,
 }
 
@@ -712,6 +717,7 @@ async fn clients(
     let list: Vec<&ClientRow> = all
         .iter()
         .filter(|c| q.app.is_empty() || c.app == q.app)
+        .filter(|c| q.plattform.is_empty() || c.platform() == q.plattform)
         .filter(|c| q.version.is_empty() || c.version == q.version)
         .filter(|c| q.zustand.is_empty() || Health::of(c, off).key() == q.zustand)
         .filter(|c| {
@@ -725,6 +731,7 @@ async fn clients(
         b,
         r#"<form class="filters" method="get"><input name="q" placeholder="{}" value="{}">
 <select name="zustand"><option value="">{}</option>{}</select>
+<select name="plattform"><option value="">{}</option>{}</select>
 <input name="app" placeholder="App" value="{}" size="8"><input name="version" placeholder="Version" value="{}" size="8">
 <button>{}</button> <a href="/arbeitsplaetze">{}</a></form>"#,
         t("Rechnername"),
@@ -748,6 +755,14 @@ async fn clients(
             h.label()
         ))
         .collect::<String>(),
+        t("Alle Plattformen"),
+        ["Windows", "Linux", "macOS"]
+            .iter()
+            .map(|p| format!(
+                r#"<option{}>{p}</option>"#,
+                if q.plattform == *p { " selected" } else { "" }
+            ))
+            .collect::<String>(),
         e(&q.app),
         e(&q.version),
         t("Filtern"),
@@ -771,7 +786,11 @@ async fn clients(
             c.company,
             urlencoding::encode(&c.install_id),
             e(&c.hostname),
-            e(&c.app),
+            format_args!(
+                r#"{}<br><span class="small muted">{}</span>"#,
+                e(&c.app),
+                c.platform()
+            ),
             version_tag(&app, &c.app, &c.version),
             e(crate::db::cut(&c.os, 60)),
             e(&c.package),
@@ -845,6 +864,7 @@ async fn client(
             format!("{} {}", h.label(), client_state(&c, h)),
         ),
         ("Version", version_tag(&app, &c.app, &c.version)),
+        (t("Plattform"), c.platform().to_string()),
         ("System", e(&c.os)),
         (t("Paket"), e(&c.package)),
         (t("Anlage"), format!("{} {}", e(&c.pbx), e(&c.pbx_version))),

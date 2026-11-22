@@ -194,6 +194,8 @@ pub const EN: &[(&str, &str)] = &[
     ("Keine Berichte.", "No reports."),
     ("Rechnername", "Computer name"),
     ("Alle Zustände", "All states"),
+    ("Alle Plattformen", "All platforms"),
+    ("Plattform", "Platform"),
     ("Filtern", "Filter"),
     ("Rechner", "Computer"),
     ("Zustand", "State"),

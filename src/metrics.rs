@@ -77,27 +77,30 @@ pub async fn metrics(State(app): State<Arc<App>>, headers: HeaderMap) -> Respons
     let mut out = String::new();
     let offline = app.config.offline_after_minutes;
 
-    let mut by_state: BTreeMap<(String, String, &str), u64> = BTreeMap::new();
-    let mut registered: BTreeMap<String, u64> = BTreeMap::new();
-    let mut pbx: BTreeMap<String, u64> = BTreeMap::new();
-    let mut chat: BTreeMap<String, u64> = BTreeMap::new();
-    let mut outdated: BTreeMap<String, u64> = BTreeMap::new();
+    type Key = (String, &'static str);
+    let mut by_state: BTreeMap<(String, &str, String, &str), u64> = BTreeMap::new();
+    let mut registered: BTreeMap<Key, u64> = BTreeMap::new();
+    let mut pbx: BTreeMap<Key, u64> = BTreeMap::new();
+    let mut chat: BTreeMap<Key, u64> = BTreeMap::new();
+    let mut outdated: BTreeMap<Key, u64> = BTreeMap::new();
     for c in &clients {
         let h = Health::of(c, offline);
+        let p = c.platform();
         *by_state
-            .entry((c.app.clone(), c.version.clone(), h.key()))
+            .entry((c.app.clone(), p, c.version.clone(), h.key()))
             .or_default() += 1;
         if h == Health::NichtErreichbar || h == Health::Unbekannt {
             continue;
         }
-        *registered.entry(c.app.clone()).or_default() += u64::from(c.softphone_registered);
-        *pbx.entry(c.app.clone()).or_default() += u64::from(c.pbx_connected);
-        *chat.entry(c.app.clone()).or_default() += u64::from(c.chat_connected);
+        let k = (c.app.clone(), p);
+        *registered.entry(k.clone()).or_default() += u64::from(c.softphone_registered);
+        *pbx.entry(k.clone()).or_default() += u64::from(c.pbx_connected);
+        *chat.entry(k.clone()).or_default() += u64::from(c.chat_connected);
         if app
             .latest(&c.app)
             .is_some_and(|l| releases::older(&c.version, &l))
         {
-            *outdated.entry(c.app.clone()).or_default() += 1;
+            *outdated.entry(k).or_default() += 1;
         }
     }
 
@@ -113,13 +116,13 @@ pub async fn metrics(State(app): State<Arc<App>>, headers: HeaderMap) -> Respons
 
     let _ = writeln!(
         out,
-        "# HELP stardash_clients Arbeitsplätze je App, Version und Zustand"
+        "# HELP stardash_clients Arbeitsplätze je App, Plattform, Version und Zustand"
     );
     let _ = writeln!(out, "# TYPE stardash_clients gauge");
-    for ((a, v, s), n) in &by_state {
+    for ((a, p, v, s), n) in &by_state {
         let _ = writeln!(
             out,
-            "stardash_clients{{app=\"{}\",version=\"{}\",zustand=\"{s}\"}} {n}",
+            "stardash_clients{{app=\"{}\",plattform=\"{p}\",version=\"{}\",zustand=\"{s}\"}} {n}",
             esc(a),
             esc(v)
         );
@@ -148,8 +151,8 @@ pub async fn metrics(State(app): State<Arc<App>>, headers: HeaderMap) -> Respons
     ] {
         let _ = writeln!(out, "# HELP {name} {help}");
         let _ = writeln!(out, "# TYPE {name} gauge");
-        for (a, n) in map {
-            let _ = writeln!(out, "{name}{{app=\"{}\"}} {n}", esc(a));
+        for ((a, p), n) in map {
+            let _ = writeln!(out, "{name}{{app=\"{}\",plattform=\"{p}\"}} {n}", esc(a));
         }
     }
 
@@ -196,9 +199,10 @@ pub async fn metrics(State(app): State<Arc<App>>, headers: HeaderMap) -> Respons
             let ok = Health::of(c, offline) == Health::Ok;
             let _ = writeln!(
                 out,
-                "stardash_client_ok{{rechner=\"{}\",app=\"{}\"}} {}",
+                "stardash_client_ok{{rechner=\"{}\",app=\"{}\",plattform=\"{}\"}} {}",
                 esc(&c.hostname),
                 esc(&c.app),
+                c.platform(),
                 u8::from(ok)
             );
         }

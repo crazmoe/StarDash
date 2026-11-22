@@ -348,7 +348,7 @@ apps = []                   # leer = alle, sonst z. B. ["StarCMX"]
 `https://stardash.firma.ch/metrics` liefert Kennzahlen im Prometheus-Format
 (lesbar für Prometheus, Grafana, Zabbix, Checkmk, Icinga):
 
-- Arbeitsplätze je Programm, Version und Zustand (ok, Fehler, nicht erreichbar)
+- Arbeitsplätze je Programm, Plattform (Windows, Linux, macOS), Version und Zustand (ok, Fehler, nicht erreichbar)
 - angemeldete Softphones, veraltete Versionen
 - Fehler heute nach Art, gespeicherte Berichte je Anlass
 
