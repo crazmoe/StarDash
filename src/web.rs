@@ -622,7 +622,7 @@ async fn clients(
         e(&q.app),
         e(&q.version)
     );
-    b.push_str(r#"<div class="box"><table><tr><th>Rechner</th><th>App</th><th>Version</th><th>System</th><th>Anlage</th><th>Zustand</th><th>Letzte Meldung</th><th>Berichte 24 h</th></tr>"#);
+    b.push_str(r#"<div class="box"><table><tr><th>Rechner</th><th>App</th><th>Version</th><th>System</th><th>Anlage</th><th>Zustand</th><th>Letzte Meldung</th><th>Offene Berichte 24 h</th></tr>"#);
     for c in &list {
         let h = Health::of(c, off);
         let _ = write!(
@@ -641,7 +641,7 @@ async fn clients(
             ago(c.last_seen),
             if c.reports_24h > 0 {
                 format!(
-                    r#"<a href="/berichte?arbeitsplatz={}">{}</a>"#,
+                    r#"<a href="/berichte?arbeitsplatz={}&amp;offen=1">{}</a>"#,
                     urlencoding::encode(&c.install_id),
                     c.reports_24h
                 )

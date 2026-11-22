@@ -627,7 +627,47 @@ impl Db {
             query = query.bind(now());
         }
         query.execute(&self.pool).await?;
+        // Neues Passwort: offene Anmeldungen enden
+        if exists {
+            self.end_sessions(name).await?;
+        }
         Ok(())
+    }
+
+    /// Meldet einen Benutzer überall ab
+    pub async fn end_sessions(&self, name: &str) -> anyhow::Result<()> {
+        sqlx::query(
+            &self
+                .sql("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE name = ?)"),
+        )
+        .bind(name)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// `false`, wenn es den Benutzer nicht gibt
+    pub async fn remove_user(&self, name: &str) -> anyhow::Result<bool> {
+        self.end_sessions(name).await?;
+        let res = sqlx::query(&self.sql("DELETE FROM users WHERE name = ?"))
+            .bind(name)
+            .execute(&self.pool)
+            .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    /// (Name, Rolle, Firma oder leer für alle)
+    pub async fn users(&self) -> anyhow::Result<Vec<(String, String, String)>> {
+        let sql = format!(
+            "SELECT u.name, u.role, {} FROM users u LEFT JOIN companies c ON c.id = u.company_id ORDER BY u.name",
+            self.text_col("COALESCE(c.name, '')")
+        );
+        Ok(sqlx::query(&sql)
+            .fetch_all(&self.pool)
+            .await?
+            .into_iter()
+            .map(|r| (get_text(&r, 0), get_text(&r, 1), get_text(&r, 2)))
+            .collect())
     }
 
     pub async fn user_count(&self) -> anyhow::Result<i64> {
@@ -827,7 +867,7 @@ impl ReportRow {
     }
 }
 
-const CLIENT_SELECT: &str = "SELECT c.install_id, c.company_id, c.hostname, c.app, c.version, c.os, c.package, c.pbx, c.pbx_version, c.first_seen, c.last_seen, c.last_event, c.heartbeat, c.pbx_connected, c.chat_connected, c.softphone_registered, c.softphone_enabled, c.audio_ok, c.uptime_secs, c.last_error, (SELECT COUNT(*) FROM reports r WHERE r.company_id = c.company_id AND r.install_id = c.install_id AND r.received >= ?) FROM clients c";
+const CLIENT_SELECT: &str = "SELECT c.install_id, c.company_id, c.hostname, c.app, c.version, c.os, c.package, c.pbx, c.pbx_version, c.first_seen, c.last_seen, c.last_event, c.heartbeat, c.pbx_connected, c.chat_connected, c.softphone_registered, c.softphone_enabled, c.audio_ok, c.uptime_secs, c.last_error, (SELECT COUNT(*) FROM reports r WHERE r.company_id = c.company_id AND r.install_id = c.install_id AND r.done = 0 AND r.received >= ?) FROM clients c";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ClientRow {
@@ -852,7 +892,7 @@ pub struct ClientRow {
     pub audio_ok: bool,
     pub uptime_secs: i64,
     pub last_error: i64,
-    /// Berichte der letzten 24 Stunden
+    /// Offene (nicht erledigte) Berichte der letzten 24 Stunden
     pub reports_24h: i64,
 }
 

@@ -85,6 +85,8 @@ Befehle:
   benutzer NAME [ROLLE] [FIRMA] Benutzer für die Weboberfläche anlegen oder
                                 Passwort neu setzen (ROLLE: support oder lesen,
                                 Standard support; FIRMA: Name, Standard alle)
+  benutzer-liste                Benutzer der Weboberfläche auflisten
+  benutzer-loeschen NAME        Benutzer löschen und abmelden
   pruefen                       Einstellungen, Datenbank und Datenordner prüfen
   --version                     Version zeigen
 
@@ -216,6 +218,25 @@ async fn command_run(
             println!("Benutzer: {name}\nPasswort: {password}\nRolle:    {role}");
             Ok(())
         }
+        "benutzer-liste" => {
+            for (name, role, company) in db.users().await? {
+                let company = if company.is_empty() {
+                    "alle Firmen"
+                } else {
+                    &company
+                };
+                println!("{name}\t{role}\t{company}");
+            }
+            Ok(())
+        }
+        "benutzer-loeschen" => {
+            let name = args.get(1).unwrap_or_else(|| usage());
+            if !db.remove_user(name).await? {
+                anyhow::bail!("Benutzer „{name}“ nicht gefunden");
+            }
+            println!("Benutzer {name} gelöscht.");
+            Ok(())
+        }
         "pruefen" => {
             println!("Einstellungen: {} ok", config_path.display());
             println!("Datenbank:     {:?} ok", config.database.kind);
@@ -327,6 +348,45 @@ mod tests {
         db.add_user("admin", &auth::hash_password("pw").unwrap(), "support", 0)
             .await
             .unwrap();
+        // Benutzer mit Firma, neues Passwort beendet Anmeldung, löschen
+        let reader = format!("leser-{run}");
+        let pw = auth::hash_password("pw").unwrap();
+        let cid = db
+            .companies()
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|(_, n)| *n == company)
+            .unwrap()
+            .0;
+        db.add_user(&reader, &pw, "lesen", cid).await.unwrap();
+        let (uid, _) = db.user_login(&reader).await.unwrap().unwrap();
+        db.add_session(&format!("s-{run}"), uid, db::now() + 60)
+            .await
+            .unwrap();
+        db.add_user(&reader, &pw, "lesen", cid).await.unwrap();
+        assert!(
+            db.session_user(&format!("s-{run}"))
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            db.users()
+                .await
+                .unwrap()
+                .iter()
+                .any(|(n, r, c)| *n == reader && r == "lesen" && *c == company)
+        );
+        assert!(
+            db.users()
+                .await
+                .unwrap()
+                .iter()
+                .any(|(n, _, c)| n == "admin" && c.is_empty())
+        );
+        assert!(db.remove_user(&reader).await.unwrap());
+        assert!(!db.remove_user(&reader).await.unwrap());
         let app = Arc::new(App {
             config,
             db,
@@ -423,6 +483,15 @@ mod tests {
             .find(|c| c.install_id == format!("inst-{kind}-{run}"))
             .unwrap();
         assert!(c.heartbeat && !c.softphone_registered && c.reports_24h == 1);
+        // Erledigte Berichte zählen nicht mehr als Fehler
+        app.db.set_report_state(&id, true, "").await.unwrap();
+        let clients = app.db.clients(None).await.unwrap();
+        let c = clients
+            .iter()
+            .find(|c| c.install_id == format!("inst-{kind}-{run}"))
+            .unwrap();
+        assert_eq!(c.reports_24h, 0);
+        app.db.set_report_state(&id, false, "").await.unwrap();
         let errors = app.db.errors(None, 1).await.unwrap();
         assert!(
             errors.iter().any(|(_, _, _, k, n)| k == "sip" && *n >= 4),
