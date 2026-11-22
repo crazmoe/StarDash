@@ -897,6 +897,11 @@ pub struct ClientRow {
 }
 
 impl ClientRow {
+    /// Windows, Linux oder macOS (leer, wenn unbekannt)
+    pub fn platform(&self) -> &'static str {
+        crate::model::platform(&self.os, &self.package)
+    }
+
     fn from_row(r: &AnyRow) -> Self {
         let b = |i: usize| r.get::<i64, _>(i) != 0;
         ClientRow {

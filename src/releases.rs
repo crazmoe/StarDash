@@ -6,6 +6,8 @@ use crate::App;
 /// App → Repository auf GitHub
 pub const REPOS: &[(&str, &str)] = &[
     ("StarCLX", "crazmoe/StarCLX"),
+    // Ältere Windows-Clients heissen StarCMX und werden weiter mit dem
+    // StarCMX-Repository verglichen; StarCLX unter Windows mit StarCLX.
     ("StarCMX", "crazmoe/StarCMX"),
     ("StarMAC", "crazmoe/StarMAC"),
 ];

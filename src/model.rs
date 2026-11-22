@@ -19,6 +19,27 @@ pub struct Client {
     pub pbx_version: String,
 }
 
+/// Plattform eines Arbeitsplatzes aus Paketart und System. Unabhängig vom
+/// Programmnamen, damit StarCLX unter Windows und Linux getrennt zählbar bleibt.
+pub fn platform(os: &str, package: &str) -> &'static str {
+    match package {
+        "windows" | "msi" | "nsis" | "winget" => return "Windows",
+        "macos" | "dmg" => return "macOS",
+        "deb" | "rpm" | "flatpak" | "appimage" | "arch" | "tar" => return "Linux",
+        _ => {}
+    }
+    let os = os.to_lowercase();
+    if os.contains("windows") {
+        "Windows"
+    } else if os.contains("mac") || os.contains("darwin") {
+        "macOS"
+    } else if os.is_empty() {
+        ""
+    } else {
+        "Linux"
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Report {
     pub id: String,
@@ -99,5 +120,17 @@ mod tests {
             serde_json::from_str(r#"{"client":null,"time":1,"event":"start","errors":{"sip":2}}"#)
                 .unwrap();
         assert_eq!(hb.errors["sip"], 2);
+    }
+
+    #[test]
+    fn platform_from_package_and_os() {
+        use super::platform;
+        assert_eq!(platform("Windows 11 Pro 24H2", "windows"), "Windows");
+        assert_eq!(platform("Microsoft Windows 10", ""), "Windows");
+        assert_eq!(platform("Ubuntu 24.04", "deb"), "Linux");
+        assert_eq!(platform("Fedora 41", "flatpak"), "Linux");
+        assert_eq!(platform("macOS 15", "macos"), "macOS");
+        assert_eq!(platform("Debian 12", "unbekannt"), "Linux");
+        assert_eq!(platform("", ""), "");
     }
 }

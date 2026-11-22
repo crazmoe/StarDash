@@ -690,10 +690,10 @@ mod tests {
         let body = String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec())
             .unwrap();
         assert!(
-            body.contains("stardash_clients{app=\"StarCLX\",version=\"2.0.0\",zustand=\"fehler\"}"),
+            body.contains("stardash_clients{app=\"StarCLX\",plattform=\"Linux\",version=\"2.0.0\",zustand=\"fehler\"}"),
             "{body}"
         );
-        assert!(body.contains("stardash_clients_veraltet{app=\"StarCLX\"} "));
+        assert!(body.contains("stardash_clients_veraltet{app=\"StarCLX\",plattform=\"Linux\"} "));
         assert!(body.contains("stardash_client_ok{rechner=\"PC-EMPFANG\""));
         let _ = std::fs::remove_dir_all(&dir);
     }
