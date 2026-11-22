@@ -290,7 +290,7 @@ Open `https://stardash.example.com` and sign in.
 - **Overview:** number of workstations, how many currently have problems or
   are unreachable, errors of the last days by version, latest reports.
 - **Workstations:** every computer with app, version (outdated versions are
-  marked), operating system, connection to the PBX, chat, softphone, audio and
+  marked; StarDash checks GitHub for the latest version at start and every 6 hours, `check_releases`), operating system, connection to the PBX, chat, softphone, audio and
   last message.
 - **State of a workstation:**
 

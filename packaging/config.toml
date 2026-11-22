@@ -28,9 +28,9 @@ max_upload_mb = 20
 # unreachable (clients report every 15 minutes by default).
 offline_after_minutes = 45
 
-# Einmal am Tag die neueste Version von StarCLX/StarCMX/StarMAC auf GitHub
+# Beim Start und alle 6 Stunden die neueste Version von StarCLX/StarCMX/StarMAC auf GitHub
 # nachsehen, um veraltete Arbeitsplätze zu markieren (false ohne Internet).
-# Check GitHub once a day for the latest StarCLX/StarCMX/StarMAC version to
+# Check GitHub at start and every 6 hours for the latest StarCLX/StarCMX/StarMAC version to
 # mark outdated workstations (false without internet access).
 check_releases = true
 

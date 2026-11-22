@@ -22,7 +22,7 @@ pub struct Config {
     /// Ohne Statusmeldung seit so vielen Minuten gilt ein Client als nicht
     /// erreichbar
     pub offline_after_minutes: u32,
-    /// Einmal am Tag die neueste Client-Version auf GitHub nachsehen
+    /// Beim Start und alle 6 Stunden die neueste Client-Version auf GitHub nachsehen
     pub check_releases: bool,
     /// Metriken einzelner Rechner ausgeben (Standard: nur zusammengezählt)
     pub metrics_per_host: bool,
