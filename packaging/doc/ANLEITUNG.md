@@ -281,7 +281,7 @@ dem Arbeitsplatz und geht später raus.
 - **Übersicht:** Anzahl Arbeitsplätze, wie viele gerade Probleme haben oder
   nicht erreichbar sind, Fehler der letzten Tage nach Version, neueste Berichte.
 - **Arbeitsplätze:** jeder Rechner mit Programm, Version (veraltete Versionen
-  sind markiert), Betriebssystem, Verbindung zur Anlage, Chat, Softphone, Ton
+  sind markiert; StarDash schaut beim Start und alle 6 Stunden auf GitHub nach der neuesten Version, `check_releases`), Betriebssystem, Verbindung zur Anlage, Chat, Softphone, Ton
   und letzter Meldung.
 - **Zustand eines Arbeitsplatzes:**
 
