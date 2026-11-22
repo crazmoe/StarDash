@@ -51,12 +51,12 @@ impl Health {
     }
 
     pub fn label(self) -> &'static str {
-        match self {
+        crate::i18n::t(match self {
             Health::Ok => "In Ordnung",
             Health::Fehler => "Fehler",
             Health::NichtErreichbar => "Nicht erreichbar",
             Health::Unbekannt => "Nur Berichte",
-        }
+        })
     }
 }
 

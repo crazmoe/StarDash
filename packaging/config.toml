@@ -1,60 +1,79 @@
-# StarDash – Einstellungen
-# Nach Änderungen: systemctl restart stardash
+# StarDash – Einstellungen / settings
+# Nach Änderungen / after changes: systemctl restart stardash
+# Alle Namen und Werte gibt es auch auf Englisch (in Klammern).
+# All keys and values also have English names (in brackets).
+
+# Sprache: "de", "en" oder leer = Weboberfläche nach Browser, Befehle nach LANG
+# Language: "de", "en" or empty = web interface follows the browser, commands LANG
+language = ""
 
 # Adresse, auf der StarDash lauscht. Standard nur lokal; davor gehört ein
 # Webserver mit HTTPS (Beispiele in /usr/share/doc/stardash/).
+# Address StarDash listens on. Local only by default; put a web server with
+# HTTPS in front (examples in /usr/share/doc/stardash/).
 listen = "127.0.0.1:8470"
 
-# Datenordner (Berichte, SQLite-Datei)
+# Datenordner (Berichte, SQLite-Datei) / data folder (reports, SQLite file)
 data_dir = "/var/lib/stardash"
 
-# Berichte nach so vielen Tagen löschen
+# Berichte nach so vielen Tagen löschen / delete reports after this many days
 retention_days = 30
 
-# Grösster Bericht in MB (gepackt)
+# Grösster Bericht in MB (gepackt) / largest report in MB (compressed)
 max_upload_mb = 20
 
 # Ohne Statusmeldung seit so vielen Minuten gilt ein Arbeitsplatz als nicht
-# erreichbar (Clients melden sich standardmässig alle 15 Minuten)
+# erreichbar (Clients melden sich standardmässig alle 15 Minuten).
+# Without a status message for this many minutes a workstation counts as
+# unreachable (clients report every 15 minutes by default).
 offline_after_minutes = 45
 
 # Einmal am Tag die neueste Version von StarCLX/StarCMX/StarMAC auf GitHub
-# nachsehen, um veraltete Arbeitsplätze zu markieren (false in Netzen ohne
-# Internet)
+# nachsehen, um veraltete Arbeitsplätze zu markieren (false ohne Internet).
+# Check GitHub once a day for the latest StarCLX/StarCMX/StarMAC version to
+# mark outdated workstations (false without internet access).
 check_releases = true
 
 # Metriken unter /metrics: standardmässig nur zusammengezählt. true gibt
-# zusätzlich den Zustand einzelner Rechner aus (nur für Störungen gedacht,
-# nicht um Anwesenheit zu prüfen).
+# zusätzlich den Zustand einzelner Rechner aus (für Störungen, nicht um
+# Anwesenheit zu prüfen).
+# Metrics at /metrics: totals only by default. true adds the state of each
+# computer (for outages, not to check attendance).
 metrics_per_host = false
-# Leer = /metrics ohne Anmeldung (dann nur aus dem internen Netz erreichbar
-# machen), sonst als Bearer-Token mitsenden
+# Leer = /metrics ohne Anmeldung (dann nur im internen Netz erreichbar machen),
+# sonst als Bearer-Token mitsenden.
+# Empty = /metrics without authentication (then expose it internally only),
+# otherwise send it as a bearer token.
 metrics_token = ""
 
-[datenbank]
-# sqlite (Standard), mariadb oder postgresql
-art = "sqlite"
-# Nur bei mariadb/postgresql:
+[datenbank]   # [database]
+# sqlite (Standard), mariadb oder postgresql / sqlite (default), mariadb or postgresql
+art = "sqlite"   # (type)
+# Nur bei mariadb/postgresql / only for mariadb/postgresql:  (url)
 # adresse = "mysql://stardash:geheim@localhost/stardash"
 # adresse = "postgres://stardash:geheim@localhost/stardash"
-# Protokolle der Berichte als Dateien im Datenordner ("dateien") oder in der
-# Datenbank ("datenbank")
-berichte = "dateien"
+# Protokolle der Berichte als Dateien im Datenordner oder in der Datenbank:
+# Report logs as files in the data folder or in the database:
+# "dateien" (files) / "datenbank" (database)
+berichte = "dateien"   # (reports)
 
 [issues]
-# "vorgabe" = Issue auf github.com bei crazmoe/StarCLX bzw. crazmoe/StarCMX
-# "aus"     = kein Knopf „Issue erstellen“
-# "eigene"  = nur die Ziele unten
-modus = "vorgabe"
+# "vorgabe" (default) = Issue auf github.com bei crazmoe/StarCLX bzw. StarCMX
+#                       issue on github.com at crazmoe/StarCLX or StarCMX
+# "aus" (off)         = kein Knopf „Issue erstellen“ / no "Create issue" button
+# "eigene" (own)      = nur die Ziele unten / only the targets below
+modus = "vorgabe"   # (mode)
 # Optional für die Vorgabe: GitHub-Token (Rechte: Issues schreiben, Gists).
 # Ohne Token öffnet StarDash ein vorausgefülltes Issue im Browser.
+# Optional for the default: GitHub token (issues write, gists). Without a
+# token StarDash opens a prefilled issue in the browser.
 # github_token = ""
 
-# Eigene Ziele (mehrere möglich):
-# [[issues.ziel]]
+# Eigene Ziele (mehrere möglich) / own targets (several allowed):
+# [[issues.ziel]]           # [[issues.target]]
 # name = "IT Telefonie"
-# art = "gitlab"            # github, gitlab, gitea (auch Forgejo)
+# art = "gitlab"            # (type) github, gitlab, gitea (auch/also Forgejo)
 # url = "https://gitlab.firma.ch"
-# projekt = "it/telefonie"  # GitHub/Gitea: owner/repo
+# projekt = "it/telefonie"  # (project) GitHub/Gitea: owner/repo
 # token = ""
-# apps = []                 # leer = alle, sonst z. B. ["StarCMX"]
+# apps = []                 # leer = alle / empty = all, z. B./e.g. ["StarCMX"]

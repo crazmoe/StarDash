@@ -73,7 +73,7 @@ pub fn reason_label(r: &str) -> &str {
     REASONS
         .iter()
         .find(|(k, _)| *k == r)
-        .map(|(_, l)| *l)
+        .map(|(_, l)| crate::i18n::t(l))
         .unwrap_or(r)
 }
 

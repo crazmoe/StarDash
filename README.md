@@ -26,7 +26,7 @@ support can find problems without asking users for log files.
 
 Not affiliated with STARFACE GmbH. "STARFACE" is used for descriptive purposes only.
 
-> **Status:** in development. There is no release yet.
+> Works with StarCLX and StarCMX 2.0.0 and later. Web interface and commands in English and German.
 
 ## Installation
 
@@ -34,7 +34,8 @@ Download the Debian package for your architecture from the
 [releases](https://github.com/crazmoe/StarDash/releases) and install it with
 `sudo apt install ./stardash_<version>_amd64.deb`. Setup steps (company key,
 web user, HTTPS reverse proxy, client defaults file, monitoring, privacy) are in
-[packaging/doc/ANLEITUNG.md](packaging/doc/ANLEITUNG.md) (German), installed to
+[packaging/doc/GUIDE.md](packaging/doc/GUIDE.md) (German:
+[ANLEITUNG.md](packaging/doc/ANLEITUNG.md)), installed to
 `/usr/share/doc/stardash/`.
 
 ## Contributing

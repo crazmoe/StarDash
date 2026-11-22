@@ -1,6 +1,6 @@
 [package]
 name = "stardash"
-version = "0.1.0"
+version = "1.0.0"
 description = "Selbst gehostete Support-Übersicht für StarCLX, StarCMX und StarMAC: Fehlerberichte, Zustand der Clients, Metriken"
 edition = "2024"
 rust-version = "1.88"
@@ -47,7 +47,12 @@ Selbst gehostete Support-Übersicht für die STARFACE-Clients StarCLX, StarCMX \
 und StarMAC: Fehlerberichte mit bereinigten Protokollen, Zustand und Version \
 jedes Arbeitsplatzes, Issues mit Protokoll, Prometheus-Metriken. Daten in \
 SQLite, MariaDB oder PostgreSQL. Zeigt den Zustand der Programme, nicht das \
-Verhalten von Personen."""
+Verhalten von Personen.
+
+Self-hosted support dashboard for the STARFACE clients StarCLX, StarCMX and \
+StarMAC: error reports with cleaned logs, state and version of every \
+workstation, issues with logs, Prometheus metrics. Shows the state of the \
+apps, not the behaviour of people. Not a product of STARFACE GmbH."""
 conf-files = ["/etc/stardash/config.toml"]
 maintainer-scripts = "packaging/debian/"
 systemd-units = { unit-name = "stardash", enable = true, start = true, restart-after-upgrade = true }
@@ -57,4 +62,5 @@ assets = [
     ["packaging/doc/*", "usr/share/doc/stardash/", "644"],
     ["README.md", "usr/share/doc/stardash/README.md", "644"],
     ["CHANGELOG.md", "usr/share/doc/stardash/CHANGELOG.md", "644"],
+    ["THIRD-PARTY-LICENSES.txt", "usr/share/doc/stardash/THIRD-PARTY-LICENSES.txt", "644"],
 ]

@@ -28,7 +28,11 @@ pub struct Config {
     pub metrics_per_host: bool,
     /// Zugang zu `/metrics`: leer = ohne Anmeldung, sonst Bearer-Token
     pub metrics_token: String,
-    #[serde(rename = "datenbank")]
+    /// Sprache: "de", "en" oder leer (Weboberfläche nach Browser, Befehle
+    /// nach `LANG`)
+    #[serde(alias = "sprache")]
+    pub language: String,
+    #[serde(rename = "datenbank", alias = "database")]
     pub database: Database,
     pub issues: Issues,
 }
@@ -44,6 +48,7 @@ impl Default for Config {
             check_releases: true,
             metrics_per_host: false,
             metrics_token: String::new(),
+            language: String::new(),
             database: Database::default(),
             issues: Issues::default(),
         }
@@ -72,8 +77,10 @@ impl Kind {
 pub enum ReportStore {
     /// Als gepackte Dateien im Datenordner (Standard)
     #[default]
+    #[serde(alias = "files")]
     Dateien,
     /// In der Datenbank
+    #[serde(alias = "database")]
     Datenbank,
 }
 
@@ -81,15 +88,15 @@ pub enum ReportStore {
 #[serde(default, deny_unknown_fields)]
 pub struct Database {
     /// sqlite (Standard), mariadb oder postgresql
-    #[serde(rename = "art")]
+    #[serde(rename = "art", alias = "type")]
     pub kind: Kind,
     /// Verbindung für MariaDB/PostgreSQL, z. B.
     /// `mysql://stardash:geheim@localhost/stardash` oder
     /// `postgres://stardash:geheim@localhost/stardash`
-    #[serde(rename = "adresse")]
+    #[serde(rename = "adresse", alias = "url")]
     pub url: String,
     /// Wo die Protokolle der Berichte liegen
-    #[serde(rename = "berichte")]
+    #[serde(rename = "berichte", alias = "reports")]
     pub reports: ReportStore,
 }
 
@@ -98,23 +105,26 @@ pub struct Database {
 pub enum IssueMode {
     /// github.com crazmoe/StarCLX bzw. crazmoe/StarCMX (bzw. StarMAC)
     #[default]
+    #[serde(alias = "default")]
     Vorgabe,
     /// Kein Knopf „Issue erstellen“
+    #[serde(alias = "off")]
     Aus,
     /// Nur die eigenen Ziele
+    #[serde(alias = "own")]
     Eigene,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 pub struct Issues {
-    #[serde(rename = "modus")]
+    #[serde(rename = "modus", alias = "mode")]
     pub mode: IssueMode,
     /// Token für die Vorgabe (github.com), damit StarDash Issue und Gist
     /// selbst anlegt. Ohne Token öffnet StarDash ein vorausgefülltes Issue im
     /// Browser des Supports.
     pub github_token: String,
-    #[serde(rename = "ziel")]
+    #[serde(rename = "ziel", alias = "target")]
     pub targets: Vec<IssueTarget>,
 }
 
@@ -125,13 +135,13 @@ pub struct IssueTarget {
     #[serde(rename = "name", default)]
     pub name: String,
     /// github, gitlab, gitea (auch Forgejo)
-    #[serde(rename = "art")]
+    #[serde(rename = "art", alias = "type")]
     pub kind: TargetKind,
     /// Adresse der Instanz (GitHub: leer = github.com)
     #[serde(default)]
     pub url: String,
     /// GitHub/Gitea: owner/repo; GitLab: Pfad oder ID des Projekts
-    #[serde(rename = "projekt")]
+    #[serde(rename = "projekt", alias = "project")]
     pub project: String,
     #[serde(default)]
     pub token: String,
@@ -154,7 +164,7 @@ impl Config {
         let text = match std::fs::read_to_string(path) {
             Ok(t) => t,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                tracing::warn!(path = %path.display(), "Keine Konfiguration, nehme Standardwerte");
+                tracing::warn!(path = %path.display(), "Keine Konfiguration, nehme Standardwerte / no config, using defaults");
                 String::new()
             }
             Err(e) => return Err(anyhow::anyhow!("{}: {e}", path.display())),
@@ -162,7 +172,14 @@ impl Config {
         let config: Config =
             toml::from_str(&text).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
         if config.database.kind != Kind::Sqlite && config.database.url.is_empty() {
-            anyhow::bail!("[datenbank] adresse fehlt für {:?}", config.database.kind);
+            anyhow::bail!(
+                "{} {:?}",
+                crate::i18n::pick(
+                    "[datenbank] adresse fehlt für",
+                    "[database] url is missing for"
+                ),
+                config.database.kind
+            );
         }
         Ok(config)
     }
@@ -209,5 +226,30 @@ mod tests {
         assert_eq!(c.database.kind, Kind::Postgresql);
         assert_eq!(c.database.reports, ReportStore::Datenbank);
         assert_eq!(c.issues.targets[0].kind, TargetKind::Gitlab);
+        // Dasselbe mit englischen Namen
+        let c: Config = toml::from_str(
+            r#"
+            language = "en"
+            [database]
+            type = "mariadb"
+            url = "mysql://x@localhost/stardash"
+            reports = "database"
+            [issues]
+            mode = "own"
+            [[issues.target]]
+            type = "gitea"
+            project = "it/tel"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(c.language, "en");
+        assert_eq!(c.database.kind, Kind::Mariadb);
+        assert_eq!(c.database.url, "mysql://x@localhost/stardash");
+        assert_eq!(c.database.reports, ReportStore::Datenbank);
+        assert_eq!(c.issues.mode, IssueMode::Eigene);
+        assert_eq!(c.issues.targets[0].project, "it/tel");
+        let c: Config =
+            toml::from_str("[issues]\nmode = \"off\"\n[database]\nreports = \"files\"").unwrap();
+        assert_eq!(c.issues.mode, IssueMode::Aus);
     }
 }
