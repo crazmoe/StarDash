@@ -44,6 +44,7 @@ metrics_per_host = false
 # sonst als Bearer-Token mitsenden.
 # Empty = /metrics without authentication (then expose it internally only),
 # otherwise send it as a bearer token.
+# Erzeugen / generate: openssl rand -hex 32
 metrics_token = ""
 
 [datenbank]   # [database]

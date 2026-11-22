@@ -363,13 +363,53 @@ By default only **totals**. `metrics_per_host = true` also outputs the state of
 each computer (meant for outages, not for checking attendance).
 
 Without `metrics_token`, `/metrics` is readable without authentication. Then
-restrict the path to the internal network in the web server, or set a token:
+restrict the path to the internal network in the web server, or set a token.
 
-```toml
-metrics_token = "long-random-token"
+**Create a token:**
+
+1. Generate a random token (any long text, e.g. 64 characters):
+
+   ```sh
+   openssl rand -hex 32
+   ```
+
+2. Put the result into `/etc/stardash/config.toml`:
+
+   ```toml
+   metrics_token = "3f9c…(output of openssl)…"
+   ```
+
+3. Restart the service: `sudo systemctl restart stardash`
+
+4. Check: without the token `/metrics` now answers `401`, with it the values.
+
+   ```sh
+   curl -i https://stardash.example.com/metrics
+   curl -H "Authorization: Bearer 3f9c…" https://stardash.example.com/metrics
+   ```
+
+**Add it to the monitoring:** the monitoring sends the token in the header
+`Authorization: Bearer <token>`. Prometheus example:
+
+```yaml
+scrape_configs:
+  - job_name: stardash
+    scheme: https
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials: "3f9c…"
+    static_configs:
+      - targets: ["stardash.example.com"]
 ```
 
-The monitoring sends it as `Authorization: Bearer long-random-token`.
+Zabbix (HTTP agent), Checkmk and Icinga have a field for custom headers:
+`Authorization` with the value `Bearer 3f9c…`.
+
+**Change the token:** generate a new one, replace it in `config.toml`, restart
+the service and update the monitoring. The old token stops working. The token
+only covers `/metrics`, not the clients (they use the company key) and not the
+login to the web interface.
 
 ## 10. Operation
 
