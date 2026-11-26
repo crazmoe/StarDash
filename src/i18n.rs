@@ -195,6 +195,18 @@ pub const EN: &[(&str, &str)] = &[
     ("Rechnername", "Computer name"),
     ("Alle Zustände", "All states"),
     ("Alle Plattformen", "All platforms"),
+    (
+        "Anmeldung abgelehnt: Die Adresse im Browser passt nicht zur Adresse, die der Webserver an StarDash weitergibt. Details im Protokoll: journalctl -u stardash",
+        "Login refused: the address in the browser does not match the address the web server passes to StarDash. Details in the log: journalctl -u stardash",
+    ),
+    (
+        "Abgelehnt: Die Adresse im Browser passt nicht zur Adresse, die der Webserver an StarDash weitergibt. Details im Protokoll: journalctl -u stardash",
+        "Refused: the address in the browser does not match the address the web server passes to StarDash. Details in the log: journalctl -u stardash",
+    ),
+    (
+        "Die Rolle „lesen“ darf Berichte nicht ändern.",
+        "The role “read” may not change reports.",
+    ),
     ("Plattform", "Platform"),
     ("Filtern", "Filter"),
     ("Rechner", "Computer"),

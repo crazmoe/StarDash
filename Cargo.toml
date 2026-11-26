@@ -1,6 +1,6 @@
 [package]
 name = "stardash"
-version = "1.1.0"
+version = "1.1.1"
 description = "Selbst gehostete Support-Übersicht für StarCLX, StarCMX und StarMAC: Fehlerberichte, Zustand der Clients, Metriken"
 edition = "2024"
 rust-version = "1.88"

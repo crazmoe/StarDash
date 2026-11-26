@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.1
+
+- Anmeldung mit 403 behoben, wenn ein Webserver auf einem eigenen Port davor
+  steht (nginx gibt mit `$host` keinen Port weiter) oder `Origin: null` sendet.
+  Der Schutz gegen fremde Formulare nutzt jetzt `Sec-Fetch-Site` und vergleicht
+  nur den Rechnernamen.
+- Eine Ablehnung steht mit Grund im Protokoll (`journalctl -u stardash`), und
+  der Browser zeigt eine verständliche Meldung statt einer leeren Seite.
+
+/ Fixed 403 on login behind a web server on its own port or with
+`Origin: null`; refusals are logged with the reason and explained in the page.
+
 ## 1.1.0
 
 - Plattform (Windows, Linux, macOS) je Arbeitsplatz, aus Paketart und System

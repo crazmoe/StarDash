@@ -307,20 +307,78 @@ async fn user(app: &App, headers: &HeaderMap) -> Result<User, Response> {
     Err(Redirect::to("/login").into_response())
 }
 
-/// Schutz gegen Formulare fremder Seiten: Origin muss zum Host passen
+/// Schutz gegen Formulare fremder Seiten. Moderne Browser sagen es direkt
+/// (`Sec-Fetch-Site`), sonst muss der Rechnername im Origin zu Host oder
+/// X-Forwarded-Host passen. Der Port zählt nicht: nginx gibt mit `$host` keinen
+/// weiter, und `Origin: null` kommt bei `Referrer-Policy: no-referrer` vor.
 fn same_origin(headers: &HeaderMap) -> bool {
-    let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()) else {
+    let get = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
+    match get("sec-fetch-site") {
+        Some("same-origin" | "none") => return true,
+        Some("cross-site" | "same-site") => {
+            deny_log(headers, "Sec-Fetch-Site");
+            return false;
+        }
+        _ => {}
+    }
+    let Some(origin) = get("origin") else {
         return true; // ältere Browser; das Cookie ist ohnehin SameSite=Strict
     };
-    let host = headers
-        .get("x-forwarded-host")
-        .or_else(|| headers.get(header::HOST))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    origin
+    let origin_host = origin
         .split_once("://")
-        .map(|(_, h)| h.trim_end_matches('/'))
-        .is_some_and(|h| h.eq_ignore_ascii_case(host))
+        .map(|(_, h)| hostname(h.trim_end_matches('/')));
+    let ok = origin_host.is_some_and(|o| {
+        ["x-forwarded-host", "host"]
+            .iter()
+            .filter_map(|n| get(n))
+            .flat_map(|v| v.split(','))
+            .any(|h| hostname(h.trim()).eq_ignore_ascii_case(o))
+    });
+    if !ok {
+        deny_log(headers, "Origin");
+    }
+    ok
+}
+
+/// Rechnername ohne Port (auch für `[::1]:8470`)
+fn hostname(h: &str) -> &str {
+    if let Some(rest) = h.strip_prefix('[') {
+        return rest.split(']').next().unwrap_or(rest);
+    }
+    h.rsplit_once(':')
+        .filter(|(_, port)| port.chars().all(|c| c.is_ascii_digit()))
+        .map_or(h, |(name, _)| name)
+}
+
+fn deny_log(headers: &HeaderMap, why: &str) {
+    let get = |name: &str| {
+        headers
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("-")
+            .to_string()
+    };
+    tracing::warn!(
+        grund = why,
+        origin = get("origin"),
+        host = get("host"),
+        x_forwarded_host = get("x-forwarded-host"),
+        sec_fetch_site = get("sec-fetch-site"),
+        "Formular abgelehnt (403): Adresse im Browser passt nicht zur Adresse, die der Webserver weitergibt"
+    );
+}
+
+/// Verständliche Seite statt eines leeren 403
+fn forbidden(why: &str) -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        axum::response::Html(format!(
+            "<!doctype html><meta charset=\"utf-8\"><title>403</title><p>{}</p><p><a href=\"/\">{}</a></p>",
+            e(why),
+            t("Zurück")
+        )),
+    )
+        .into_response()
 }
 
 fn https(headers: &HeaderMap) -> bool {
@@ -383,7 +441,9 @@ async fn login(
     Form(f): Form<LoginForm>,
 ) -> Response {
     if !same_origin(&headers) {
-        return StatusCode::FORBIDDEN.into_response();
+        return forbidden(t(
+            "Anmeldung abgelehnt: Die Adresse im Browser passt nicht zur Adresse, die der Webserver an StarDash weitergibt. Details im Protokoll: journalctl -u stardash",
+        ));
     }
     let found = app.db.user_login(f.name.trim()).await.ok().flatten();
     let ok = match &found {
@@ -1209,8 +1269,13 @@ async fn report_state(
         Ok(u) => u,
         Err(r) => return r,
     };
-    if !same_origin(&headers) || !user.may_edit() {
-        return StatusCode::FORBIDDEN.into_response();
+    if !same_origin(&headers) {
+        return forbidden(t(
+            "Abgelehnt: Die Adresse im Browser passt nicht zur Adresse, die der Webserver an StarDash weitergibt. Details im Protokoll: journalctl -u stardash",
+        ));
+    }
+    if !user.may_edit() {
+        return forbidden(t("Die Rolle „lesen“ darf Berichte nicht ändern."));
     }
     let r = match load_report(&app, &user, &id).await {
         Ok(r) => r,
@@ -1242,7 +1307,7 @@ async fn issue_form(
         Err(r) => return r,
     };
     if !user.may_edit() {
-        return StatusCode::FORBIDDEN.into_response();
+        return forbidden(t("Die Rolle „lesen“ darf Berichte nicht ändern."));
     }
     let r = match load_report(&app, &user, &id).await {
         Ok(r) => r,
@@ -1363,8 +1428,13 @@ async fn issue_create(
         Ok(u) => u,
         Err(r) => return r,
     };
-    if !same_origin(&headers) || !user.may_edit() {
-        return StatusCode::FORBIDDEN.into_response();
+    if !same_origin(&headers) {
+        return forbidden(t(
+            "Abgelehnt: Die Adresse im Browser passt nicht zur Adresse, die der Webserver an StarDash weitergibt. Details im Protokoll: journalctl -u stardash",
+        ));
+    }
+    if !user.may_edit() {
+        return forbidden(t("Die Rolle „lesen“ darf Berichte nicht ändern."));
     }
     let r = match load_report(&app, &user, &id).await {
         Ok(r) => r,
@@ -1464,5 +1534,32 @@ mod tests {
             HeaderValue::from_static("https://evil.example"),
         );
         assert!(!same_origin(&h));
+        // nginx mit $host: Port fehlt im Host
+        h.insert(
+            header::ORIGIN,
+            HeaderValue::from_static("https://dash.firma.ch:8443"),
+        );
+        assert!(same_origin(&h));
+        // Origin: null (Referrer-Policy no-referrer), Browser sagt same-origin
+        h.insert(header::ORIGIN, HeaderValue::from_static("null"));
+        assert!(!same_origin(&h));
+        h.insert("sec-fetch-site", HeaderValue::from_static("same-origin"));
+        assert!(same_origin(&h));
+        h.insert("sec-fetch-site", HeaderValue::from_static("cross-site"));
+        assert!(!same_origin(&h));
+        // Host vom Proxy umgeschrieben, X-Forwarded-Host stimmt
+        let mut h = HeaderMap::new();
+        h.insert(header::HOST, HeaderValue::from_static("127.0.0.1:8470"));
+        h.insert(
+            "x-forwarded-host",
+            HeaderValue::from_static("dash.firma.ch"),
+        );
+        h.insert(
+            header::ORIGIN,
+            HeaderValue::from_static("https://dash.firma.ch"),
+        );
+        assert!(same_origin(&h));
+        assert_eq!(hostname("[::1]:8470"), "::1");
+        assert_eq!(hostname("dash:8443"), "dash");
     }
 }
